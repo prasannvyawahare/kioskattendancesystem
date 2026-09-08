@@ -1,0 +1,35 @@
+# Claude Code local config
+.claude/
+
+# Node / Next.js
+admin_panel/node_modules/
+admin_panel/.next/
+admin_panel/out/
+admin_panel/.env
+admin_panel/.env.local
+admin_panel/*.tsbuildinfo
+admin_panel/npm-debug.log*
+
+# Flutter
+kiosk_app/.dart_tool/
+kiosk_app/.flutter-plugins
+kiosk_app/.flutter-plugins-dependencies
+kiosk_app/.packages
+kiosk_app/build/
+kiosk_app/.pub-cache/
+kiosk_app/.pub/
+kiosk_app/android/.gradle/
+kiosk_app/android/local.properties
+kiosk_app/android/key.properties
+kiosk_app/ios/Flutter/Flutter.podspec
+kiosk_app/ios/Pods/
+kiosk_app/*.iml
+kiosk_app/.idea/
+kiosk_app/assets/models/*.tflite
+
+# Supabase local
+supabase/.branches/
+supabase/.temp/
+
+# OS
+.DS_Store

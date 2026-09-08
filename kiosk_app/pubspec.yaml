@@ -1,0 +1,35 @@
+name: kiosk_app
+description: Facial recognition attendance kiosk (Android tablet, single camera screen).
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  supabase_flutter: ^2.6.0
+  camera: ^0.11.0
+  google_mlkit_face_detection: ^0.11.0
+  # tflite_flutter's original maintainer (am15h) is inactive, but the
+  # package itself is still published and maintained (now under the
+  # tensorflow org via github.com/tensorflow/flutter-tflite) and its
+  # Interpreter API is stable and well-documented -- used here in favor of
+  # the newer `flutter_litert` package, whose API surface isn't pinned down
+  # enough to hand-write against without a Flutter toolchain to verify with.
+  tflite_flutter: ^0.11.0
+  image: ^4.2.0
+  flutter_secure_storage: ^9.2.2
+  path_provider: ^2.1.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/models/
