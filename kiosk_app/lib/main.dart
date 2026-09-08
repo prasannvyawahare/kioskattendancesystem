@@ -18,7 +18,7 @@ Future<void> main() async {
 
   await Supabase.initialize(
     url: KioskConfig.supabaseUrl,
-    anonKey: KioskConfig.supabaseAnonKey,
+    publishableKey: KioskConfig.supabaseAnonKey,
   );
 
   await SupabaseService.instance.signInAsKiosk();
