@@ -44,6 +44,7 @@ class _CameraScreenState extends State<CameraScreen> {
   bool _busy = false;
   int _consecutiveDetections = 0;
   String? _statusMessage;
+  String? _modelLoadError;
   String _resultTitle = '';
   String _resultSubtitle = '';
   Color _resultColor = Colors.teal;
@@ -59,14 +60,22 @@ class _CameraScreenState extends State<CameraScreen> {
 
   Future<void> _setup() async {
     setState(() => _statusMessage = 'Loading recognition model...');
-    final embeddingService = await EmbeddingService.load();
-    _embeddingService = embeddingService;
+    try {
+      final embeddingService = await EmbeddingService.load();
+      _embeddingService = embeddingService;
 
-    _enrollmentSync = EnrollmentSyncService(embeddingService: embeddingService)..start();
+      _enrollmentSync = EnrollmentSyncService(embeddingService: embeddingService)..start();
 
-    await _refreshEmployees();
-    _employeeRefreshTimer =
-        Timer.periodic(const Duration(seconds: 60), (_) => _refreshEmployees());
+      await _refreshEmployees();
+      _employeeRefreshTimer =
+          Timer.periodic(const Duration(seconds: 60), (_) => _refreshEmployees());
+    } catch (e) {
+      // No .tflite model at assets/models/face_embedding.tflite yet (see
+      // README) -- camera preview and face detection still work without
+      // it, matching/attendance just won't. Surfaced as a banner instead of
+      // crashing so the rest of the pipeline stays testable.
+      _modelLoadError = 'Recognition model not loaded: $e';
+    }
 
     setState(() => _statusMessage = 'Starting camera...');
     final cameras = await availableCameras();
@@ -254,6 +263,20 @@ class _CameraScreenState extends State<CameraScreen> {
               title: _resultTitle,
               subtitle: _resultSubtitle,
               color: _resultColor,
+            ),
+          if (_modelLoadError != null)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Container(
+                width: double.infinity,
+                color: Colors.red.shade900,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Text(
+                  _modelLoadError!,
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
+              ),
             ),
         ],
       ),
