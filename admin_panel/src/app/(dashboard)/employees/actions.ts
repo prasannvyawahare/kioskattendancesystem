@@ -60,6 +60,57 @@ export async function registerEmployee(formData: FormData) {
   redirect(`/employees/${employee.id}`);
 }
 
+export async function updateEmployee(employeeId: string, formData: FormData) {
+  const supabase = createClient();
+
+  const full_name = String(formData.get("full_name") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim() || null;
+  const phone = String(formData.get("phone") ?? "").trim() || null;
+  const department = String(formData.get("department") ?? "").trim() || null;
+  const employee_code = String(formData.get("employee_code") ?? "").trim() || null;
+
+  if (!full_name) {
+    redirect(`/employees/${employeeId}/edit?error=${encodeURIComponent("Full name is required")}`);
+  }
+
+  const { error } = await supabase
+    .from("employees")
+    .update({ full_name, email, phone, department, employee_code })
+    .eq("id", employeeId);
+
+  if (error) {
+    redirect(`/employees/${employeeId}/edit?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath(`/employees/${employeeId}`);
+  revalidatePath("/employees");
+  redirect(`/employees/${employeeId}`);
+}
+
+export async function deleteEmployee(employeeId: string) {
+  const supabase = createClient();
+
+  const { data: photos } = await supabase
+    .from("employee_photos")
+    .select("storage_path")
+    .eq("employee_id", employeeId);
+
+  if (photos && photos.length > 0) {
+    // Best-effort: an orphaned storage object is harmless (private bucket),
+    // so a failed removal here shouldn't block deleting the employee row.
+    await supabase.storage
+      .from("employee-photos")
+      .remove(photos.map((p) => p.storage_path));
+  }
+
+  // Cascades to employee_photos and face_embeddings via their FK
+  // `on delete cascade` (0001_schema.sql).
+  await supabase.from("employees").delete().eq("id", employeeId);
+
+  revalidatePath("/employees");
+  redirect("/employees");
+}
+
 export async function toggleActive(employeeId: string, nextActive: boolean) {
   const supabase = createClient();
   await supabase.from("employees").update({ is_active: nextActive }).eq("id", employeeId);

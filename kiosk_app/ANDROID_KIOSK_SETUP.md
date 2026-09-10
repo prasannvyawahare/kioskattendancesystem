@@ -111,6 +111,7 @@ class MainActivity : FlutterActivity() {
 }
 ```
 
+
 ## 5. Provision the tablet as Device Owner
 
 **This step is what makes lock task mode actually unbreakable** — without

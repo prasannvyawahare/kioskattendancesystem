@@ -10,15 +10,19 @@ import 'package:tflite_flutter/tflite_flutter.dart';
 ///
 /// [inputSize] and [embeddingSize] must match whatever .tflite model you
 /// place at [modelAssetPath] -- see kiosk_app/README.md for sourcing one.
-/// [embeddingSize] must also match the `vector(192)` column in Postgres.
+/// [embeddingSize] must also match the `vector(512)` column in Postgres.
+///
+/// Currently pinned to the standard FaceNet model (160x160 input, 512-d
+/// output) from the `face_verification` pub package, not the originally
+/// planned 112x112/192-d MobileFaceNet -- see migration 0006.
 class EmbeddingService {
   EmbeddingService._(this._interpreter);
 
   final Interpreter _interpreter;
 
   static const modelAssetPath = 'assets/models/face_embedding.tflite';
-  static const inputSize = 112;
-  static const embeddingSize = 192;
+  static const inputSize = 160;
+  static const embeddingSize = 512;
 
   static Future<EmbeddingService> load() async {
     final interpreter = await Interpreter.fromAsset(modelAssetPath);

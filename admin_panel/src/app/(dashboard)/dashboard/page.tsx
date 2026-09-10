@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { LiveAttendanceFeed } from "./live-attendance-feed";
+import { AutoRefresh } from "@/components/AutoRefresh";
 
 export default async function DashboardPage() {
   const supabase = createClient();
@@ -32,6 +33,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      <AutoRefresh />
       <div>
         <h1 className="text-lg font-semibold text-slate-900">Dashboard</h1>
         <p className="text-sm text-slate-500">Today, {new Date().toLocaleDateString()}</p>

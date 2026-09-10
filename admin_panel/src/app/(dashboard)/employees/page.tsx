@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { EmbeddingStatus } from "@/lib/database.types";
+import { AutoRefresh } from "@/components/AutoRefresh";
 
 const STATUS_STYLES: Record<EmbeddingStatus, string> = {
   pending: "bg-amber-50 text-amber-700",
@@ -18,6 +19,7 @@ export default async function EmployeesPage() {
 
   return (
     <div>
+      <AutoRefresh />
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-slate-900">Employees</h1>
         <Link

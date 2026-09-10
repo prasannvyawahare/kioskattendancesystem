@@ -7,6 +7,13 @@ class KioskConfig {
   static const kioskEmail = String.fromEnvironment('KIOSK_EMAIL');
   static const kioskPassword = String.fromEnvironment('KIOSK_PASSWORD');
 
+  /// Hardware-level enrollment gate: only kiosks built/installed with
+  /// `--dart-define=ENABLE_ENROLLMENT=true` compile the PIN-entry gesture
+  /// and member-management screens in at all. Combined at runtime with
+  /// `kiosk_settings.enrollment_enabled` (KioskSettingsService) so an admin
+  /// can also disable enrollment fleet-wide without reinstalling anything.
+  static const enrollmentEnabled = bool.fromEnvironment('ENABLE_ENROLLMENT');
+
   static void assertConfigured() {
     assert(
       supabaseUrl.isNotEmpty &&

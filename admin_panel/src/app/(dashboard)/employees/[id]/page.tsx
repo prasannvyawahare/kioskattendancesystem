@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { toggleActive, resetEmbeddings } from "../actions";
+import { DeleteEmployeeButton } from "./DeleteEmployeeButton";
+import { AutoRefresh } from "@/components/AutoRefresh";
 
 export default async function EmployeeDetailPage({ params }: { params: { id: string } }) {
   const supabase = createClient();
@@ -37,6 +39,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
 
   return (
     <div className="space-y-8">
+      <AutoRefresh />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold text-slate-900">{employee.full_name}</h1>
@@ -44,9 +47,18 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
             {employee.employee_code ?? "No code"} · {employee.department ?? "No department"}
           </p>
         </div>
-        <Link href="/employees" className="text-sm text-slate-500 hover:text-slate-900">
-          Back to employees
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link
+            href={`/employees/${employee.id}/edit`}
+            className="text-sm font-medium text-slate-600 hover:text-slate-900"
+          >
+            Edit
+          </Link>
+          <DeleteEmployeeButton employeeId={employee.id} fullName={employee.full_name} />
+          <Link href="/employees" className="text-sm text-slate-500 hover:text-slate-900">
+            Back to employees
+          </Link>
+        </div>
       </div>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">

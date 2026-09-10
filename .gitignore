@@ -26,6 +26,7 @@ kiosk_app/ios/Pods/
 kiosk_app/*.iml
 kiosk_app/.idea/
 kiosk_app/assets/models/*.tflite
+kiosk_app/.env
 
 # Supabase local
 supabase/.branches/
