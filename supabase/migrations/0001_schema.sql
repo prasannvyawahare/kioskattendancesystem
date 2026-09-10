@@ -50,7 +50,7 @@ create index employee_photos_employee_id_idx on public.employee_photos (employee
 create table public.face_embeddings (
   id uuid primary key default gen_random_uuid(),
   employee_id uuid not null references public.employees (id) on delete cascade,
-  embedding vector(192) not null,
+  embedding vector(512) not null,
   source_photo_id uuid references public.employee_photos (id) on delete set null,
   created_at timestamptz not null default now()
 );

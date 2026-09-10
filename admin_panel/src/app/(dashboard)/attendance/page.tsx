@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { ExportCsvButton } from "./export-csv-button";
+import { DeleteLogButton } from "./DeleteLogButton";
+import { AutoRefresh } from "@/components/AutoRefresh";
 
 export default async function AttendancePage({
   searchParams,
@@ -32,6 +34,7 @@ export default async function AttendancePage({
 
   return (
     <div className="space-y-6">
+      <AutoRefresh />
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-slate-900">Attendance log</h1>
         <ExportCsvButton rows={rows} />
@@ -85,6 +88,7 @@ export default async function AttendancePage({
               <th className="px-4 py-3 font-medium">Date</th>
               <th className="px-4 py-3 font-medium">Time</th>
               <th className="px-4 py-3 font-medium">Confidence</th>
+              <th className="px-4 py-3 font-medium" />
             </tr>
           </thead>
           <tbody>
@@ -101,11 +105,14 @@ export default async function AttendancePage({
                 <td className="px-4 py-3 text-slate-600">
                   {row.confidence != null ? row.confidence.toFixed(2) : "-"}
                 </td>
+                <td className="px-4 py-3 text-right">
+                  <DeleteLogButton logId={row.id} label={row.event_type.replace("_", " ")} />
+                </td>
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
                   No attendance records match this filter.
                 </td>
               </tr>

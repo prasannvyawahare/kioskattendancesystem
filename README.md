@@ -50,7 +50,7 @@ without it, RLS will block both apps from doing anything.
 ```sh
 cd admin_panel
 cp .env.local.example .env.local   # fill in your Supabase project URL + anon key
-npm install
+//npm install
 npm run dev
 ```
 

@@ -100,7 +100,7 @@ begin
   end if;
 
   insert into public.face_embeddings (employee_id, embedding, source_photo_id)
-  values (p_employee_id, p_embedding::vector(192), p_photo_id);
+  values (p_employee_id, p_embedding::vector(512), p_photo_id);
 
   update public.employees set embedding_status = 'processing'
   where id = p_employee_id and embedding_status = 'pending';
