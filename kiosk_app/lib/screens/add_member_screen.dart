@@ -8,7 +8,7 @@ import 'package:image/image.dart' as img;
 
 import '../services/embedding_service.dart';
 import '../services/face_image_utils.dart';
-import '../services/supabase_service.dart';
+import '../services/kiosk_backend.dart';
 
 class _Capture {
   _Capture({required this.jpegBytes, required this.embedding});
@@ -50,6 +50,14 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
   final _nameController = TextEditingController();
   final _codeController = TextEditingController();
   final _groupController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _motherNameController = TextEditingController();
+  final _motherPhoneController = TextEditingController();
+  final _motherEmailController = TextEditingController();
+  final _fatherNameController = TextEditingController();
+  final _fatherPhoneController = TextEditingController();
+  final _fatherEmailController = TextEditingController();
 
   CameraController? _controller;
   CameraDescription? _camera;
@@ -154,21 +162,39 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
     });
 
     try {
-      final employeeId = await SupabaseService.instance.enrollMember(
+      final employeeId = await KioskBackend.instance.enrollMember(
         pin: widget.pin,
         fullName: _nameController.text.trim(),
         code: _codeController.text.trim().isEmpty ? null : _codeController.text.trim(),
         group: _groupController.text.trim().isEmpty ? null : _groupController.text.trim(),
+        email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
+        phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+        motherName:
+            _motherNameController.text.trim().isEmpty ? null : _motherNameController.text.trim(),
+        motherPhone: _motherPhoneController.text.trim().isEmpty
+            ? null
+            : _motherPhoneController.text.trim(),
+        motherEmail: _motherEmailController.text.trim().isEmpty
+            ? null
+            : _motherEmailController.text.trim(),
+        fatherName:
+            _fatherNameController.text.trim().isEmpty ? null : _fatherNameController.text.trim(),
+        fatherPhone: _fatherPhoneController.text.trim().isEmpty
+            ? null
+            : _fatherPhoneController.text.trim(),
+        fatherEmail: _fatherEmailController.text.trim().isEmpty
+            ? null
+            : _fatherEmailController.text.trim(),
       );
 
       for (final capture in _captures) {
         final storagePath =
-            await SupabaseService.instance.uploadMemberPhoto(employeeId, capture.jpegBytes);
-        final photoId = await SupabaseService.instance.recordMemberPhoto(
+            await KioskBackend.instance.uploadMemberPhoto(employeeId, capture.jpegBytes);
+        final photoId = await KioskBackend.instance.recordMemberPhoto(
           employeeId: employeeId,
           storagePath: storagePath,
         );
-        await SupabaseService.instance.recordFaceEmbedding(
+        await KioskBackend.instance.recordFaceEmbedding(
           employeeId: employeeId,
           photoId: photoId,
           embedding: capture.embedding,
@@ -195,6 +221,14 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
     _nameController.dispose();
     _codeController.dispose();
     _groupController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _motherNameController.dispose();
+    _motherPhoneController.dispose();
+    _motherEmailController.dispose();
+    _fatherNameController.dispose();
+    _fatherPhoneController.dispose();
+    _fatherEmailController.dispose();
     super.dispose();
   }
 
@@ -226,6 +260,64 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
                 TextFormField(
                   controller: _groupController,
                   decoration: const InputDecoration(labelText: 'Group / department (optional)'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _emailController,
+                  decoration: const InputDecoration(labelText: 'Email (optional)'),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _phoneController,
+                  decoration: const InputDecoration(labelText: 'Phone (optional)'),
+                  keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 20),
+                Text('Parent / guardian details', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 4),
+                Text(
+                  'Used to contact a parent about attendance. Optional, but at least one '
+                  'phone number is recommended.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                Text('Mother', style: Theme.of(context).textTheme.labelLarge),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _motherNameController,
+                  decoration: const InputDecoration(labelText: 'Name (optional)'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _motherPhoneController,
+                  decoration: const InputDecoration(labelText: 'Phone (optional)'),
+                  keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _motherEmailController,
+                  decoration: const InputDecoration(labelText: 'Email (optional)'),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 16),
+                Text('Father', style: Theme.of(context).textTheme.labelLarge),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _fatherNameController,
+                  decoration: const InputDecoration(labelText: 'Name (optional)'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _fatherPhoneController,
+                  decoration: const InputDecoration(labelText: 'Phone (optional)'),
+                  keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _fatherEmailController,
+                  decoration: const InputDecoration(labelText: 'Email (optional)'),
+                  keyboardType: TextInputType.emailAddress,
                 ),
                 const SizedBox(height: 20),
                 Text(

@@ -5,8 +5,9 @@ import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 
 import 'embedding_service.dart';
+import 'error_logger.dart';
 import 'face_image_utils.dart';
-import 'supabase_service.dart';
+import 'kiosk_backend.dart';
 
 /// Background job that turns newly-registered employees' enrollment photos
 /// (captured in the admin panel, containing no embeddings of their own)
@@ -40,20 +41,23 @@ class EnrollmentSyncService {
     while (_running) {
       try {
         await syncOnce();
-      } catch (_) {
+      } catch (e, st) {
         // Best-effort background job -- swallow and retry next tick rather
-        // than crashing the kiosk over a transient network/storage error.
+        // than crashing the kiosk over a transient network/storage error,
+        // but still log it: a persistently-failing sync (bad photo,
+        // corrupt storage path) was previously invisible forever.
+        await ErrorLogger.log(e, stackTrace: st, context: 'EnrollmentSyncService._loop');
       }
       await Future<void>.delayed(pollInterval);
     }
   }
 
   Future<void> syncOnce() async {
-    final pending = await SupabaseService.instance.fetchPendingEmployees();
+    final pending = await KioskBackend.instance.fetchPendingEmployees();
 
     for (final employee in pending) {
       final employeeId = employee['id'] as String;
-      final photos = await SupabaseService.instance.fetchEmployeePhotos(employeeId);
+      final photos = await KioskBackend.instance.fetchEmployeePhotos(employeeId);
 
       if (photos.isEmpty) continue;
 
@@ -65,7 +69,7 @@ class EnrollmentSyncService {
         final embedding = await _embedPhoto(storagePath);
         if (embedding == null) continue;
 
-        await SupabaseService.instance.recordFaceEmbedding(
+        await KioskBackend.instance.recordFaceEmbedding(
           employeeId: employeeId,
           photoId: photoId,
           embedding: embedding,
@@ -74,13 +78,13 @@ class EnrollmentSyncService {
       }
 
       if (!producedAny) {
-        await SupabaseService.instance.markEmbeddingFailed(employeeId);
+        await KioskBackend.instance.markEmbeddingFailed(employeeId);
       }
     }
   }
 
   Future<List<double>?> _embedPhoto(String storagePath) async {
-    final bytes = await SupabaseService.instance.downloadPhoto(storagePath);
+    final bytes = await KioskBackend.instance.downloadPhoto(storagePath);
 
     final tempDir = await getTemporaryDirectory();
     final file = File('${tempDir.path}/enroll_${DateTime.now().microsecondsSinceEpoch}.jpg');

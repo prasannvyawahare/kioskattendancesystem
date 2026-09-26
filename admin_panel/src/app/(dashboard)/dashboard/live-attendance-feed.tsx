@@ -21,6 +21,25 @@ export function LiveAttendanceFeed({
 }) {
   const [logs, setLogs] = useState(initialLogs);
 
+  // AutoRefresh re-fetches the page (and this prop) every 5s, but this
+  // component stays mounted the whole time -- without this, `logs` would
+  // only ever grow via the realtime subscription below and never pick up
+  // deletions/renames from elsewhere. Reconcile by merging: start from the
+  // fresh server data, then keep any realtime-appended rows newer than the
+  // freshest row the server returned (rows the next poll hasn't caught up
+  // to yet), deduped by id.
+  useEffect(() => {
+    setLogs((prev) => {
+      const freshIds = new Set(initialLogs.map((log) => log.id));
+      const newestFreshScannedAt = initialLogs[0]?.scanned_at ?? "";
+      const pendingRealtimeOnly = prev.filter(
+        (log) => !freshIds.has(log.id) && log.scanned_at > newestFreshScannedAt,
+      );
+      return [...pendingRealtimeOnly, ...initialLogs];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialLogs]);
+
   useEffect(() => {
     const supabase = createClient();
 

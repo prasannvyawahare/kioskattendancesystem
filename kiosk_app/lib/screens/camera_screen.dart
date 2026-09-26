@@ -1,17 +1,20 @@
 import 'dart:async';
 
 import 'package:camera/camera.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
+import '../services/attendance_mode_service.dart';
 import '../services/attendance_service.dart';
 import '../services/embedding_service.dart';
 import '../services/enrollment_sync_service.dart';
+import '../services/error_logger.dart';
 import '../services/face_image_utils.dart';
 import '../services/face_matcher.dart';
 import '../services/greeting_service.dart';
 import '../services/kiosk_settings_service.dart';
-import '../services/supabase_service.dart';
+import '../services/sync_service.dart';
 import '../widgets/mascot_avatar.dart';
 import 'member_list_screen.dart';
 import 'pin_entry_screen.dart';
@@ -39,17 +42,32 @@ class _CameraScreenState extends State<CameraScreen> {
     ),
   );
   final FaceMatcher _matcher = FaceMatcher();
-  final AttendanceService _attendanceService = AttendanceService();
   final KioskSettingsService _settingsService = KioskSettingsService();
+
+  // Constructed in _setup() -- AttendanceService depends on
+  // AttendanceModeService's persisted value being loaded first, and
+  // SyncService needs _matcher, so these can't be simple field initializers.
+  late final AttendanceModeService _attendanceModeService;
+  late final SyncService _syncService;
+  late final AttendanceService _attendanceService;
 
   EmbeddingService? _embeddingService;
   EnrollmentSyncService? _enrollmentSync;
   GreetingService? _greetingService;
   Timer? _employeeRefreshTimer;
+  Timer? _syncTimer;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+  DateTime? _lastConnectivitySync;
+  bool _timersRunning = false;
+
+  // Avoids re-triggering a sync on every flappy connectivity blip.
+  static const _connectivitySyncCooldown = Duration(minutes: 2);
 
   _ScanState _state = _ScanState.initializing;
   bool _busy = false;
   int _consecutiveDetections = 0;
+  bool _personPresent = false;
+  Timer? _presenceLostTimer;
   String? _statusMessage;
   String? _modelLoadError;
   String _resultTitle = '';
@@ -59,6 +77,10 @@ class _CameraScreenState extends State<CameraScreen> {
 
   static const _stabilityFramesRequired = 4;
   static const _resultDisplayDuration = Duration(seconds: 3);
+  // Grace period before we drop back to the idle clock screen after the
+  // camera briefly stops seeing a face (blinking, head turn, ML Kit missing
+  // a frame) -- avoids flicker between the clock and camera views.
+  static const _presenceLostGrace = Duration(seconds: 2);
 
   @override
   void initState() {
@@ -68,6 +90,22 @@ class _CameraScreenState extends State<CameraScreen> {
 
   Future<void> _setup() async {
     setState(() => _statusMessage = 'Loading recognition model...');
+
+    // Settings load first (and start polling) so the timing knobs below
+    // (refresh/sync intervals, online timeout, min scan gap -- all
+    // admin-configurable, see KioskSettings) are populated from the real
+    // fetched row, not just defaults, by the time anything reads them.
+    await _settingsService.start();
+
+    _attendanceModeService = AttendanceModeService();
+    await _attendanceModeService.load();
+    _syncService = SyncService(matcher: _matcher);
+    await _syncService.loadInitialStatus();
+    _attendanceService = AttendanceService(
+      attendanceModeService: _attendanceModeService,
+      settingsService: _settingsService,
+    );
+
     try {
       final embeddingService = await EmbeddingService.load();
       _embeddingService = embeddingService;
@@ -76,8 +114,11 @@ class _CameraScreenState extends State<CameraScreen> {
       _enrollmentSync = EnrollmentSyncService(embeddingService: embeddingService)..start();
 
       await _refreshEmployees();
-      _employeeRefreshTimer =
-          Timer.periodic(const Duration(seconds: 60), (_) => _refreshEmployees());
+      _timersRunning = true;
+      _scheduleEmployeeRefresh();
+      _scheduleSync();
+      _connectivitySub =
+          Connectivity().onConnectivityChanged.listen(_onConnectivityChanged);
     } catch (e) {
       // No .tflite model at assets/models/face_embedding.tflite yet (see
       // README) -- camera preview and face detection still work without
@@ -86,10 +127,43 @@ class _CameraScreenState extends State<CameraScreen> {
       _modelLoadError = 'Recognition model not loaded: $e';
     }
 
-    await _settingsService.start();
-
     setState(() => _statusMessage = 'Starting camera...');
     await _startCamera();
+  }
+
+  /// Self-rescheduling rather than Timer.periodic -- each tick reads
+  /// _settingsService.current.refreshInterval fresh, so an admin's change
+  /// to that admin-configurable value takes effect from the next tick
+  /// onward instead of requiring an app restart.
+  void _scheduleEmployeeRefresh() {
+    if (!_timersRunning) return;
+    _employeeRefreshTimer = Timer(_settingsService.current.refreshInterval, () async {
+      await _refreshEmployees();
+      _scheduleEmployeeRefresh();
+    });
+  }
+
+  /// Same self-rescheduling pattern as above, driven by
+  /// _settingsService.current.syncInterval.
+  void _scheduleSync() {
+    if (!_timersRunning) return;
+    _syncTimer = Timer(_settingsService.current.syncInterval, () async {
+      await _syncService.syncNow();
+      _scheduleSync();
+    });
+  }
+
+  /// Triggers an opportunistic sync as soon as the kiosk regains a
+  /// connection, in addition to the manual button and the background timer
+  /// -- cooldown-guarded so a flapping connection doesn't spam syncNow()
+  /// (which is also internally guarded against overlapping runs, but no
+  /// point attempting network calls back-to-back on an unstable link).
+  void _onConnectivityChanged(List<ConnectivityResult> results) {
+    if (results.every((r) => r == ConnectivityResult.none)) return;
+    final last = _lastConnectivitySync;
+    if (last != null && DateTime.now().difference(last) < _connectivitySyncCooldown) return;
+    _lastConnectivitySync = DateTime.now();
+    _syncService.syncNow();
   }
 
   Future<void> _startCamera() async {
@@ -152,9 +226,12 @@ class _CameraScreenState extends State<CameraScreen> {
       _state = _ScanState.initializing;
       _statusMessage = null;
     });
+    _presenceLostTimer?.cancel();
+    _presenceLostTimer = null;
+    _personPresent = false;
 
     final pin = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => const PinEntryScreen()),
+      MaterialPageRoute(builder: (_) => PinEntryScreen(settingsService: _settingsService)),
     );
 
     if (pin != null && mounted) {
@@ -164,6 +241,8 @@ class _CameraScreenState extends State<CameraScreen> {
             settingsService: _settingsService,
             pin: pin,
             embeddingService: embeddingService,
+            attendanceModeService: _attendanceModeService,
+            syncService: _syncService,
           ),
         ),
       );
@@ -174,14 +253,7 @@ class _CameraScreenState extends State<CameraScreen> {
     await _refreshEmployees();
   }
 
-  Future<void> _refreshEmployees() async {
-    try {
-      final employees = await SupabaseService.instance.fetchEnrolledEmployees();
-      _matcher.updateEmployees(employees);
-    } catch (_) {
-      // Keep using whatever was last cached; retried on the next tick.
-    }
-  }
+  Future<void> _refreshEmployees() => _syncService.refreshEmployeesOnly();
 
   void _onFrame(CameraImage image) {
     if (_busy || _state != _ScanState.scanning || _camera == null) return;
@@ -189,11 +261,31 @@ class _CameraScreenState extends State<CameraScreen> {
     _processFrame(image).whenComplete(() => _busy = false);
   }
 
+  /// Drives the idle clock screen vs. live camera view: goes true the
+  /// instant any face appears, and only goes false after _presenceLostGrace
+  /// of seeing nobody, so momentary detection gaps don't flicker the UI.
+  void _setPersonPresent(bool seen) {
+    if (seen) {
+      _presenceLostTimer?.cancel();
+      _presenceLostTimer = null;
+      if (!_personPresent && mounted) setState(() => _personPresent = true);
+      return;
+    }
+
+    if (_personPresent && _presenceLostTimer == null) {
+      _presenceLostTimer = Timer(_presenceLostGrace, () {
+        _presenceLostTimer = null;
+        if (mounted) setState(() => _personPresent = false);
+      });
+    }
+  }
+
   Future<void> _processFrame(CameraImage image) async {
     final inputImage = FaceImageUtils.toInputImage(image, _camera!);
     if (inputImage == null) return;
 
     final faces = await _liveDetector.processImage(inputImage);
+    _setPersonPresent(faces.isNotEmpty);
 
     if (faces.length != 1) {
       _consecutiveDetections = 0;
@@ -262,7 +354,8 @@ class _CameraScreenState extends State<CameraScreen> {
             expression: MascotExpression.neutral,
           );
       }
-    } catch (_) {
+    } catch (e, st) {
+      ErrorLogger.log(e, stackTrace: st, context: 'CameraScreen._processFrame');
       if (mounted) setState(() => _state = _ScanState.scanning);
     }
   }
@@ -300,7 +393,13 @@ class _CameraScreenState extends State<CameraScreen> {
 
   @override
   void dispose() {
+    // Stops _scheduleEmployeeRefresh/_scheduleSync from rescheduling
+    // themselves if a tick is in flight right as this disposes.
+    _timersRunning = false;
     _employeeRefreshTimer?.cancel();
+    _syncTimer?.cancel();
+    _connectivitySub?.cancel();
+    _presenceLostTimer?.cancel();
     _controller?.dispose();
     _liveDetector.close();
     _enrollmentSync?.dispose();
@@ -337,6 +436,9 @@ class _CameraScreenState extends State<CameraScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
+    // The camera keeps streaming frames (and ML Kit keeps scanning them)
+    // even while this is showing -- it's a pure UI overlay, not a pause.
+    final showIdleClock = _state == _ScanState.scanning && !_personPresent;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -345,6 +447,7 @@ class _CameraScreenState extends State<CameraScreen> {
         children: [
           if (controller != null && controller.value.isInitialized)
             CameraPreview(controller),
+          if (showIdleClock) const Positioned.fill(child: _IdleClockScreen()),
           // Hidden enrollment entry point: long-press the top-left corner.
           // No visible affordance on purpose -- this is an unattended
           // public kiosk; the PIN pad is the real gate.
@@ -358,11 +461,12 @@ class _CameraScreenState extends State<CameraScreen> {
               onLongPress: _openEnrollment,
             ),
           ),
-          Positioned(
-            top: 24,
-            right: 16,
-            child: SafeArea(child: _buildMascot()),
-          ),
+          if (!showIdleClock)
+            Positioned(
+              top: 24,
+              right: 16,
+              child: SafeArea(child: _buildMascot()),
+            ),
           if (_statusMessage != null)
             Center(
               child: Column(
@@ -460,6 +564,90 @@ class _ResultPanel extends StatelessWidget {
             subtitle,
             style: const TextStyle(color: Colors.white70, fontSize: 16),
             textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Idle screen shown whenever nobody is standing in front of the camera --
+/// a plain white clock face rather than the live camera preview, so the
+/// kiosk doesn't sit there broadcasting an empty hallway. CameraScreen swaps
+/// this out for the live view the instant a face is detected (see
+/// _setPersonPresent). Keeps its own ticking timer so the clock updates
+/// without rebuilding the rest of CameraScreen every second.
+class _IdleClockScreen extends StatefulWidget {
+  const _IdleClockScreen();
+
+  @override
+  State<_IdleClockScreen> createState() => _IdleClockScreenState();
+}
+
+class _IdleClockScreenState extends State<_IdleClockScreen> {
+  static const _weekdayNames = [
+    'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
+  ];
+  static const _monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+
+  late DateTime _now = DateTime.now();
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  String get _timeText {
+    final hour = _now.hour.toString().padLeft(2, '0');
+    final minute = _now.minute.toString().padLeft(2, '0');
+    final second = _now.second.toString().padLeft(2, '0');
+    return '$hour:$minute:$second';
+  }
+
+  String get _dateText {
+    final weekday = _weekdayNames[_now.weekday - 1];
+    final month = _monthNames[_now.month - 1];
+    return '$weekday, ${_now.day} $month ${_now.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.white,
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            _timeText,
+            style: const TextStyle(
+              color: Colors.black87,
+              fontSize: 88,
+              fontWeight: FontWeight.w300,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _dateText,
+            style: const TextStyle(color: Colors.black54, fontSize: 22),
+          ),
+          const SizedBox(height: 40),
+          const Text(
+            'Stand in front of the camera to check in',
+            style: TextStyle(color: Colors.black45, fontSize: 16),
           ),
         ],
       ),

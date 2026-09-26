@@ -15,7 +15,7 @@ const geistMono = localFont({
 
 export const metadata: Metadata = {
   title: "Attendance Admin",
-  description: "Employee registration and attendance management",
+  description: "Student registration and attendance management",
 };
 
 export default function RootLayout({

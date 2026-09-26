@@ -5,6 +5,11 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
+// Mirrors MIN_PHOTOS in register-employee-form.tsx -- the client already
+// disables submit below this count, but the server action is the actual
+// enforcement point since a form can be submitted by other means.
+const MIN_PHOTOS = 3;
+
 export async function registerEmployee(formData: FormData) {
   const supabase = createClient();
 
@@ -18,6 +23,12 @@ export async function registerEmployee(formData: FormData) {
   const phone = String(formData.get("phone") ?? "").trim() || null;
   const department = String(formData.get("department") ?? "").trim() || null;
   const employee_code = String(formData.get("employee_code") ?? "").trim() || null;
+  const mother_name = String(formData.get("mother_name") ?? "").trim() || null;
+  const mother_phone = String(formData.get("mother_phone") ?? "").trim() || null;
+  const mother_email = String(formData.get("mother_email") ?? "").trim() || null;
+  const father_name = String(formData.get("father_name") ?? "").trim() || null;
+  const father_phone = String(formData.get("father_phone") ?? "").trim() || null;
+  const father_email = String(formData.get("father_email") ?? "").trim() || null;
   const photos = formData
     .getAll("photos")
     .filter((p): p is File => p instanceof File && p.size > 0);
@@ -25,19 +36,34 @@ export async function registerEmployee(formData: FormData) {
   if (!full_name) {
     redirect(`/employees/new?error=${encodeURIComponent("Full name is required")}`);
   }
-  if (photos.length < 1) {
-    redirect(`/employees/new?error=${encodeURIComponent("Capture at least one photo")}`);
+  if (photos.length < MIN_PHOTOS) {
+    redirect(
+      `/employees/new?error=${encodeURIComponent(`Capture at least ${MIN_PHOTOS} photos`)}`,
+    );
   }
 
   const { data: employee, error: insertError } = await supabase
     .from("employees")
-    .insert({ full_name, email, phone, department, employee_code, created_by: user.id })
+    .insert({
+      full_name,
+      email,
+      phone,
+      department,
+      employee_code,
+      mother_name,
+      mother_phone,
+      mother_email,
+      father_name,
+      father_phone,
+      father_email,
+      created_by: user.id,
+    })
     .select("id")
     .single();
 
   if (insertError || !employee) {
     redirect(
-      `/employees/new?error=${encodeURIComponent(insertError?.message ?? "Could not create employee")}`,
+      `/employees/new?error=${encodeURIComponent(insertError?.message ?? "Could not create student")}`,
     );
   }
 
@@ -68,6 +94,12 @@ export async function updateEmployee(employeeId: string, formData: FormData) {
   const phone = String(formData.get("phone") ?? "").trim() || null;
   const department = String(formData.get("department") ?? "").trim() || null;
   const employee_code = String(formData.get("employee_code") ?? "").trim() || null;
+  const mother_name = String(formData.get("mother_name") ?? "").trim() || null;
+  const mother_phone = String(formData.get("mother_phone") ?? "").trim() || null;
+  const mother_email = String(formData.get("mother_email") ?? "").trim() || null;
+  const father_name = String(formData.get("father_name") ?? "").trim() || null;
+  const father_phone = String(formData.get("father_phone") ?? "").trim() || null;
+  const father_email = String(formData.get("father_email") ?? "").trim() || null;
 
   if (!full_name) {
     redirect(`/employees/${employeeId}/edit?error=${encodeURIComponent("Full name is required")}`);
@@ -75,7 +107,19 @@ export async function updateEmployee(employeeId: string, formData: FormData) {
 
   const { error } = await supabase
     .from("employees")
-    .update({ full_name, email, phone, department, employee_code })
+    .update({
+      full_name,
+      email,
+      phone,
+      department,
+      employee_code,
+      mother_name,
+      mother_phone,
+      mother_email,
+      father_name,
+      father_phone,
+      father_email,
+    })
     .eq("id", employeeId);
 
   if (error) {
@@ -113,14 +157,37 @@ export async function deleteEmployee(employeeId: string) {
 
 export async function toggleActive(employeeId: string, nextActive: boolean) {
   const supabase = createClient();
-  await supabase.from("employees").update({ is_active: nextActive }).eq("id", employeeId);
+  const { error } = await supabase
+    .from("employees")
+    .update({ is_active: nextActive })
+    .eq("id", employeeId);
+
+  if (error) {
+    redirect(`/employees/${employeeId}?error=${encodeURIComponent(error.message)}`);
+  }
+
   revalidatePath(`/employees/${employeeId}`);
   revalidatePath("/employees");
 }
 
 export async function resetEmbeddings(employeeId: string) {
   const supabase = createClient();
-  await supabase.from("face_embeddings").delete().eq("employee_id", employeeId);
-  await supabase.from("employees").update({ embedding_status: "pending" }).eq("id", employeeId);
+
+  const { error: deleteError } = await supabase
+    .from("face_embeddings")
+    .delete()
+    .eq("employee_id", employeeId);
+  if (deleteError) {
+    redirect(`/employees/${employeeId}?error=${encodeURIComponent(deleteError.message)}`);
+  }
+
+  const { error: updateError } = await supabase
+    .from("employees")
+    .update({ embedding_status: "pending" })
+    .eq("id", employeeId);
+  if (updateError) {
+    redirect(`/employees/${employeeId}?error=${encodeURIComponent(updateError.message)}`);
+  }
+
   revalidatePath(`/employees/${employeeId}`);
 }

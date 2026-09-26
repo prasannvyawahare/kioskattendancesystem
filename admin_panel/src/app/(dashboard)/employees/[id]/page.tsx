@@ -5,7 +5,13 @@ import { toggleActive, resetEmbeddings } from "../actions";
 import { DeleteEmployeeButton } from "./DeleteEmployeeButton";
 import { AutoRefresh } from "@/components/AutoRefresh";
 
-export default async function EmployeeDetailPage({ params }: { params: { id: string } }) {
+export default async function EmployeeDetailPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { error?: string };
+}) {
   const supabase = createClient();
 
   const { data: employee } = await supabase
@@ -25,7 +31,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
     (photoRows ?? []).map(async (photo) => {
       const { data } = await supabase.storage
         .from("employee-photos")
-        .createSignedUrl(photo.storage_path, 300);
+        .createSignedUrl(photo.storage_path, 3600);
       return { id: photo.id, url: data?.signedUrl };
     }),
   );
@@ -40,6 +46,9 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
   return (
     <div className="space-y-8">
       <AutoRefresh />
+      {searchParams.error && (
+        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{searchParams.error}</p>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold text-slate-900">{employee.full_name}</h1>
@@ -56,7 +65,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
           </Link>
           <DeleteEmployeeButton employeeId={employee.id} fullName={employee.full_name} />
           <Link href="/employees" className="text-sm text-slate-500 hover:text-slate-900">
-            Back to employees
+            Back to students
           </Link>
         </div>
       </div>
@@ -76,7 +85,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
           )}
         </div>
         <p className="mt-2 text-xs text-slate-500">
-          The kiosk computes embeddings from these photos on its own sync cycle — this employee
+          The kiosk computes embeddings from these photos on its own sync cycle — this student
           becomes recognizable once status reaches &quot;completed&quot;.
         </p>
 
@@ -97,7 +106,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium text-slate-900">Employee</h2>
+          <h2 className="text-sm font-medium text-slate-900">Student</h2>
           <form action={toggleActive.bind(null, employee.id, !employee.is_active)}>
             <button type="submit" className="text-xs font-medium text-slate-600 underline">
               {employee.is_active ? "Deactivate" : "Reactivate"}
@@ -114,6 +123,46 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
             <dd className="text-slate-900">{employee.phone ?? "-"}</dd>
           </div>
         </dl>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <h2 className="text-sm font-medium text-slate-900">Parent / guardian details</h2>
+        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mother</p>
+            <dl className="mt-2 space-y-1 text-sm">
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">Name</dt>
+                <dd className="text-slate-900">{employee.mother_name ?? "-"}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">Phone</dt>
+                <dd className="text-slate-900">{employee.mother_phone ?? "-"}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">Email</dt>
+                <dd className="text-slate-900">{employee.mother_email ?? "-"}</dd>
+              </div>
+            </dl>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Father</p>
+            <dl className="mt-2 space-y-1 text-sm">
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">Name</dt>
+                <dd className="text-slate-900">{employee.father_name ?? "-"}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">Phone</dt>
+                <dd className="text-slate-900">{employee.father_phone ?? "-"}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">Email</dt>
+                <dd className="text-slate-900">{employee.father_email ?? "-"}</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">

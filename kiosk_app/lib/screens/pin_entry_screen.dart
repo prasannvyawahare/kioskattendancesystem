@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../services/supabase_service.dart';
+import '../services/kiosk_settings_service.dart';
+import '../services/pin_verification_service.dart';
 
 /// Numeric PIN pad guarding the hidden enrollment entry point on
 /// CameraScreen. Pops the verified PIN (as a String) once
@@ -10,14 +10,24 @@ import '../services/supabase_service.dart';
 /// MemberListScreen/AddMemberScreen can pass it to enroll_member(), which
 /// re-verifies it server-side as the real authorization gate -- this
 /// screen's check is only for fast UI feedback and lockout messaging.
+///
+/// Works offline too, via PinVerificationService's local bcrypt fallback --
+/// note that reaching this screen doesn't mean everything behind it works
+/// offline: MemberListScreen's add/edit/delete actions still need a live
+/// connection (those RPCs genuinely write server-side records), only
+/// DeviceSettingsScreen (attendance mode + sync) is fully usable offline.
 class PinEntryScreen extends StatefulWidget {
-  const PinEntryScreen({super.key});
+  const PinEntryScreen({super.key, required this.settingsService});
+
+  final KioskSettingsService settingsService;
 
   @override
   State<PinEntryScreen> createState() => _PinEntryScreenState();
 }
 
 class _PinEntryScreenState extends State<PinEntryScreen> {
+  late final _pinVerification = PinVerificationService(settingsService: widget.settingsService);
+
   String _pin = '';
   bool _checking = false;
   String? _error;
@@ -46,7 +56,7 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
 
     final enteredPin = _pin;
     try {
-      final ok = await SupabaseService.instance.verifyEnrollmentPin(enteredPin);
+      final ok = await _pinVerification.verify(enteredPin);
       if (!mounted) return;
       if (ok) {
         Navigator.of(context).pop(enteredPin);
@@ -56,18 +66,26 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
         _error = 'Incorrect PIN. Try again.';
         _pin = '';
       });
+    } on PinVerificationUnavailable {
+      if (!mounted) return;
+      setState(() {
+        _error = 'No PIN cached yet -- connect to WiFi once, then this works offline too.';
+        _pin = '';
+      });
+    } on PinVerificationLocked catch (e) {
+      if (!mounted) return;
+      final minutesLeft = e.lockedUntil.difference(DateTime.now()).inMinutes + 1;
+      setState(() {
+        _error = 'Too many attempts. Try again in $minutesLeft minute${minutesLeft == 1 ? '' : 's'}.';
+        _pin = '';
+      });
     } catch (e) {
-      // The RPC only throws when the kiosk's own session isn't a valid
-      // `kiosk`-role login (it returns a plain `false`, not an exception,
-      // for a wrong PIN) -- surface that distinction instead of a generic
-      // connection message, and log the real error since it's otherwise
-      // invisible on a kiosk with no attached console.
+      // Log the real error since it's otherwise invisible on a kiosk with
+      // no attached console.
       debugPrint('verifyEnrollmentPin failed: $e');
       if (!mounted) return;
       setState(() {
-        _error = e is PostgrestException && e.message.contains('not authorized')
-            ? 'Kiosk is not signed in. Restart the app.'
-            : 'Could not verify PIN. Check the connection and try again.';
+        _error = 'Could not verify PIN. Check the connection and try again.';
         _pin = '';
       });
     } finally {

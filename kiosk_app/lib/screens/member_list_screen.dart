@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../models/member_summary.dart';
+import '../services/attendance_mode_service.dart';
 import '../services/embedding_service.dart';
+import '../services/kiosk_backend.dart';
 import '../services/kiosk_settings_service.dart';
-import '../services/supabase_service.dart';
+import '../services/local_database.dart';
+import '../services/sync_service.dart';
 import 'add_member_screen.dart';
+import 'device_settings_screen.dart';
 
 const _statusColors = {
   'pending': Colors.amber,
@@ -23,6 +27,8 @@ class MemberListScreen extends StatefulWidget {
     required this.settingsService,
     required this.pin,
     required this.embeddingService,
+    required this.attendanceModeService,
+    required this.syncService,
   });
 
   final KioskSettingsService settingsService;
@@ -35,6 +41,11 @@ class MemberListScreen extends StatefulWidget {
   /// reused rather than loading a second ~93MB interpreter instance.
   final EmbeddingService embeddingService;
 
+  /// Passed through to DeviceSettingsScreen (reached via the app bar
+  /// settings icon below) -- same instances CameraScreen drives.
+  final AttendanceModeService attendanceModeService;
+  final SyncService syncService;
+
   @override
   State<MemberListScreen> createState() => _MemberListScreenState();
 }
@@ -42,6 +53,11 @@ class MemberListScreen extends StatefulWidget {
 class _MemberListScreenState extends State<MemberListScreen> {
   List<MemberSummary>? _members;
   String? _error;
+
+  /// Non-blocking, unlike [_error] -- set alongside a successfully-loaded
+  /// (cached) [_members] list, so _buildBody still renders it instead of
+  /// swallowing the list behind an error screen.
+  String? _offlineNotice;
 
   @override
   void initState() {
@@ -51,15 +67,33 @@ class _MemberListScreenState extends State<MemberListScreen> {
 
   Future<void> _refresh() async {
     try {
-      final members = await SupabaseService.instance.fetchAllMembers();
+      final members = await KioskBackend.instance.fetchAllMembers();
       if (!mounted) return;
       setState(() {
         _members = members;
         _error = null;
+        _offlineNotice = null;
       });
+      await LocalDatabase.instance.replaceCachedMembers(members);
     } catch (_) {
+      // Offline (or a transient failure) -- fall back to whatever
+      // SyncService's periodic poll (or an earlier successful visit to
+      // this screen) last cached, same pattern as the face-matching
+      // roster's offline fallback.
+      final cached = await LocalDatabase.instance.loadCachedMembers();
       if (!mounted) return;
-      setState(() => _error = 'Could not load members. Pull down to retry.');
+      if (cached.isNotEmpty) {
+        setState(() {
+          _members = cached;
+          _error = null;
+          _offlineNotice = 'Offline -- showing the last synced list. Pull down to retry.';
+        });
+      } else {
+        setState(() {
+          _error = 'Could not load members. Pull down to retry.';
+          _offlineNotice = null;
+        });
+      }
     }
   }
 
@@ -80,31 +114,92 @@ class _MemberListScreenState extends State<MemberListScreen> {
     final nameController = TextEditingController(text: member.fullName);
     final codeController = TextEditingController(text: member.code ?? '');
     final groupController = TextEditingController(text: member.group ?? '');
+    final emailController = TextEditingController(text: member.email ?? '');
+    final phoneController = TextEditingController(text: member.phone ?? '');
+    final motherNameController = TextEditingController(text: member.motherName ?? '');
+    final motherPhoneController = TextEditingController(text: member.motherPhone ?? '');
+    final motherEmailController = TextEditingController(text: member.motherEmail ?? '');
+    final fatherNameController = TextEditingController(text: member.fatherName ?? '');
+    final fatherPhoneController = TextEditingController(text: member.fatherPhone ?? '');
+    final fatherEmailController = TextEditingController(text: member.fatherEmail ?? '');
     final formKey = GlobalKey<FormState>();
 
     final saved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text('Edit ${widget.settingsService.current.memberLabel.toLowerCase()}'),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Name'),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+        content: SizedBox(
+          width: 400,
+          child: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nameController,
+                    decoration: const InputDecoration(labelText: 'Name'),
+                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  ),
+                  TextFormField(
+                    controller: codeController,
+                    decoration: const InputDecoration(labelText: 'ID / code (optional)'),
+                  ),
+                  TextFormField(
+                    controller: groupController,
+                    decoration: const InputDecoration(labelText: 'Group / department (optional)'),
+                  ),
+                  TextFormField(
+                    controller: emailController,
+                    decoration: const InputDecoration(labelText: 'Email (optional)'),
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                  TextFormField(
+                    controller: phoneController,
+                    decoration: const InputDecoration(labelText: 'Phone (optional)'),
+                    keyboardType: TextInputType.phone,
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Mother', style: Theme.of(dialogContext).textTheme.labelLarge),
+                  ),
+                  TextFormField(
+                    controller: motherNameController,
+                    decoration: const InputDecoration(labelText: 'Name (optional)'),
+                  ),
+                  TextFormField(
+                    controller: motherPhoneController,
+                    decoration: const InputDecoration(labelText: 'Phone (optional)'),
+                    keyboardType: TextInputType.phone,
+                  ),
+                  TextFormField(
+                    controller: motherEmailController,
+                    decoration: const InputDecoration(labelText: 'Email (optional)'),
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Father', style: Theme.of(dialogContext).textTheme.labelLarge),
+                  ),
+                  TextFormField(
+                    controller: fatherNameController,
+                    decoration: const InputDecoration(labelText: 'Name (optional)'),
+                  ),
+                  TextFormField(
+                    controller: fatherPhoneController,
+                    decoration: const InputDecoration(labelText: 'Phone (optional)'),
+                    keyboardType: TextInputType.phone,
+                  ),
+                  TextFormField(
+                    controller: fatherEmailController,
+                    decoration: const InputDecoration(labelText: 'Email (optional)'),
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                ],
               ),
-              TextFormField(
-                controller: codeController,
-                decoration: const InputDecoration(labelText: 'ID / code (optional)'),
-              ),
-              TextFormField(
-                controller: groupController,
-                decoration: const InputDecoration(labelText: 'Group / department (optional)'),
-              ),
-            ],
+            ),
           ),
         ),
         actions: [
@@ -125,12 +220,26 @@ class _MemberListScreenState extends State<MemberListScreen> {
     if (saved != true) return;
 
     try {
-      await SupabaseService.instance.updateMember(
+      await KioskBackend.instance.updateMember(
         pin: widget.pin,
         employeeId: member.id,
         fullName: nameController.text.trim(),
         code: codeController.text.trim().isEmpty ? null : codeController.text.trim(),
         group: groupController.text.trim().isEmpty ? null : groupController.text.trim(),
+        email: emailController.text.trim().isEmpty ? null : emailController.text.trim(),
+        phone: phoneController.text.trim().isEmpty ? null : phoneController.text.trim(),
+        motherName:
+            motherNameController.text.trim().isEmpty ? null : motherNameController.text.trim(),
+        motherPhone:
+            motherPhoneController.text.trim().isEmpty ? null : motherPhoneController.text.trim(),
+        motherEmail:
+            motherEmailController.text.trim().isEmpty ? null : motherEmailController.text.trim(),
+        fatherName:
+            fatherNameController.text.trim().isEmpty ? null : fatherNameController.text.trim(),
+        fatherPhone:
+            fatherPhoneController.text.trim().isEmpty ? null : fatherPhoneController.text.trim(),
+        fatherEmail:
+            fatherEmailController.text.trim().isEmpty ? null : fatherEmailController.text.trim(),
       );
       _refresh();
     } catch (e) {
@@ -163,7 +272,7 @@ class _MemberListScreenState extends State<MemberListScreen> {
     if (confirmed != true) return;
 
     try {
-      await SupabaseService.instance.deleteMember(pin: widget.pin, employeeId: member.id);
+      await KioskBackend.instance.deleteMember(pin: widget.pin, employeeId: member.id);
       _refresh();
     } catch (e) {
       if (!mounted) return;
@@ -181,6 +290,18 @@ class _MemberListScreenState extends State<MemberListScreen> {
       appBar: AppBar(
         title: Text('${label}s'),
         actions: [
+          IconButton(
+            tooltip: 'Kiosk settings',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => Navigator.of(context).push<void>(
+              MaterialPageRoute(
+                builder: (_) => DeviceSettingsScreen(
+                  attendanceModeService: widget.attendanceModeService,
+                  syncService: widget.syncService,
+                ),
+              ),
+            ),
+          ),
           if (widget.settingsService.enrollmentAllowed)
             TextButton.icon(
               onPressed: _openAddMember,
@@ -214,6 +335,7 @@ class _MemberListScreenState extends State<MemberListScreen> {
     if (members.isEmpty) {
       return ListView(
         children: [
+          if (_offlineNotice != null) _OfflineNoticeBanner(_offlineNotice!),
           const SizedBox(height: 80),
           Center(child: Text('No ${label.toLowerCase()}s enrolled yet.')),
         ],
@@ -221,9 +343,13 @@ class _MemberListScreenState extends State<MemberListScreen> {
     }
 
     return ListView.separated(
-      itemCount: members.length,
+      itemCount: members.length + (_offlineNotice != null ? 1 : 0),
       separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (context, index) {
+      itemBuilder: (context, rawIndex) {
+        if (_offlineNotice != null) {
+          if (rawIndex == 0) return _OfflineNoticeBanner(_offlineNotice!);
+        }
+        final index = _offlineNotice != null ? rawIndex - 1 : rawIndex;
         final member = members[index];
         final color = _statusColors[member.embeddingStatus] ?? Colors.grey;
         return ListTile(
@@ -257,6 +383,21 @@ class _MemberListScreenState extends State<MemberListScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _OfflineNoticeBanner extends StatelessWidget {
+  const _OfflineNoticeBanner(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: Colors.amber.withValues(alpha: 0.15),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Text(text, style: const TextStyle(fontSize: 12)),
     );
   }
 }

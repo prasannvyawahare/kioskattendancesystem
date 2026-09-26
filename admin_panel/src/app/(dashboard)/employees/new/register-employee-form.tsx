@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition, type FormEvent } from "react";
+import { useEffect, useRef, useState, useTransition, type FormEvent } from "react";
 import { registerEmployee } from "../actions";
 
 type Capture = { id: string; blob: Blob; previewUrl: string };
@@ -38,6 +38,17 @@ export function RegisterEmployeeForm() {
     streamRef.current = null;
     setCameraReady(false);
   }
+
+  // Safety net for the "Stop camera" button: these are photos of children,
+  // so the stream must not keep running if the admin navigates away (e.g.
+  // submits the form, which redirect()s client-side rather than reloading
+  // the page) without explicitly stopping it first.
+  useEffect(() => {
+    return () => {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    };
+  }, []);
 
   function capturePhoto() {
     const video = videoRef.current;
@@ -84,6 +95,10 @@ export function RegisterEmployeeForm() {
         new File([capture.blob], `photo-${index}.jpg`, { type: "image/jpeg" }),
       );
     });
+    // Photos are already captured into formData -- release the camera
+    // before submitting rather than leaving it running through the
+    // (possibly slow) upload + redirect.
+    stopCamera();
     startTransition(() => {
       registerEmployee(formData);
     });
@@ -93,10 +108,34 @@ export function RegisterEmployeeForm() {
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Full name" name="full_name" required />
-        <Field label="Employee code" name="employee_code" />
+        <Field label="Student code" name="employee_code" />
         <Field label="Email" name="email" type="email" />
         <Field label="Phone" name="phone" />
         <Field label="Department" name="department" />
+      </div>
+
+      <div className="space-y-4 rounded-xl border border-slate-200 p-4">
+        <div>
+          <h2 className="text-sm font-medium text-slate-900">Parent / guardian details</h2>
+          <p className="text-xs text-slate-500">
+            Used to contact a parent about their child&apos;s attendance. Optional, but at least
+            one phone number is recommended.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mother</p>
+            <Field label="Name" name="mother_name" />
+            <Field label="Phone" name="mother_phone" />
+            <Field label="Email" name="mother_email" type="email" />
+          </div>
+          <div className="space-y-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Father</p>
+            <Field label="Name" name="father_name" />
+            <Field label="Phone" name="father_phone" />
+            <Field label="Email" name="father_email" type="email" />
+          </div>
+        </div>
       </div>
 
       <div className="rounded-xl border border-slate-200 p-4">
@@ -164,10 +203,10 @@ export function RegisterEmployeeForm() {
 
       <button
         type="submit"
-        disabled={isPending || captures.length < 1}
-        className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+        disabled={isPending || captures.length < MIN_PHOTOS}
+        className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
       >
-        {isPending ? "Registering..." : "Register employee"}
+        {isPending ? "Registering..." : "Register student"}
       </button>
     </form>
   );

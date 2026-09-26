@@ -10,7 +10,7 @@ type Row = {
 
 export function ExportCsvButton({ rows }: { rows: Row[] }) {
   function handleExport() {
-    const header = ["Employee", "Event", "Date", "Time", "Confidence"];
+    const header = ["Student", "Event", "Date", "Time", "Confidence"];
     const csvRows = rows.map((row) => [
       row.employee_name,
       row.event_type,

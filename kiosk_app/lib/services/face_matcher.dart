@@ -22,6 +22,11 @@ class FaceMatcher {
 
   List<EnrolledEmployee> _employees = [];
 
+  /// Used by SyncService to decide whether a failed network refresh should
+  /// fall back to LocalDatabase's cached roster (only worth doing if we
+  /// don't already have a roster in memory, e.g. right after a cold boot).
+  bool get hasEmployees => _employees.isNotEmpty;
+
   void updateEmployees(List<EnrolledEmployee> employees) {
     _employees = employees;
   }

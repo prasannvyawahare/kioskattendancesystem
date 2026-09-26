@@ -71,6 +71,43 @@ export default async function SettingsPage({
           />
         </div>
 
+        <div className="space-y-3 rounded-xl border border-slate-200 p-4">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">Kiosk timing</h2>
+            <p className="text-xs text-slate-500">
+              How long kiosks wait for the server before falling back to offline mode, how often
+              they auto-sync/refresh in the background, and the minimum gap between a check-in and
+              check-out for the same person.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <NumberField
+              label="Online timeout (seconds)"
+              name="online_timeout_seconds"
+              defaultValue={settings?.online_timeout_seconds}
+              hint="How long a scan/PIN check waits for the server before using the offline path."
+            />
+            <NumberField
+              label="Min. check-in/check-out gap (minutes)"
+              name="min_scan_gap_minutes"
+              defaultValue={settings?.min_scan_gap_minutes}
+              hint="Also enforced server-side, so this can't be bypassed by an offline kiosk."
+            />
+            <NumberField
+              label="Background sync interval (hours)"
+              name="sync_interval_hours"
+              defaultValue={settings?.sync_interval_hours}
+              hint="How often a kiosk auto-syncs queued offline attendance."
+            />
+            <NumberField
+              label="Roster refresh interval (seconds)"
+              name="refresh_interval_seconds"
+              defaultValue={settings?.refresh_interval_seconds}
+              hint="How often a kiosk re-polls the employee list, member list, and this settings row."
+            />
+          </div>
+        </div>
+
         <div className="space-y-1 rounded-xl border border-slate-200 p-4">
           <label htmlFor="enrollment_pin" className="text-sm font-medium text-slate-700">
             Enrollment PIN
@@ -80,18 +117,19 @@ export default async function SettingsPage({
             name="enrollment_pin"
             type="password"
             autoComplete="off"
+            minLength={4}
             placeholder={settings?.enrollment_pin_hash ? "•••••• (unchanged)" : "Not set"}
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
           />
           <p className="text-xs text-slate-500">
             Leave blank to keep the current PIN. Entering a value here replaces it -- the previous
-            PIN is not shown, it&apos;s stored as a hash.
+            PIN is not shown, it&apos;s stored as a hash. Must be at least 4 characters.
           </p>
         </div>
 
         <button
           type="submit"
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
         >
           Save settings
         </button>
@@ -121,6 +159,36 @@ function TextField({
         name={name}
         type="text"
         defaultValue={defaultValue ?? ""}
+        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+      />
+      {hint && <p className="text-xs text-slate-500">{hint}</p>}
+    </div>
+  );
+}
+
+function NumberField({
+  label,
+  name,
+  defaultValue,
+  hint,
+}: {
+  label: string;
+  name: string;
+  defaultValue?: number | null;
+  hint?: string;
+}) {
+  return (
+    <div className="space-y-1">
+      <label htmlFor={name} className="text-sm font-medium text-slate-700">
+        {label}
+      </label>
+      <input
+        id={name}
+        name={name}
+        type="number"
+        min={1}
+        step={1}
+        defaultValue={defaultValue ?? undefined}
         className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
       />
       {hint && <p className="text-xs text-slate-500">{hint}</p>}
