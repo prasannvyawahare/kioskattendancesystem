@@ -40,6 +40,15 @@ export interface Database {
           employee_code: string | null;
           is_active: boolean;
           embedding_status: EmbeddingStatus;
+          // Parent/guardian contacts -- see supabase/migrations/0016_parent_contacts.sql.
+          // Captured for present/absent notifications; sending isn't wired
+          // up here, just the data capture.
+          mother_name: string | null;
+          mother_phone: string | null;
+          mother_email: string | null;
+          father_name: string | null;
+          father_phone: string | null;
+          father_email: string | null;
           created_at: string;
           created_by: string | null;
         };
@@ -52,6 +61,12 @@ export interface Database {
           employee_code?: string | null;
           is_active?: boolean;
           embedding_status?: EmbeddingStatus;
+          mother_name?: string | null;
+          mother_phone?: string | null;
+          mother_email?: string | null;
+          father_name?: string | null;
+          father_phone?: string | null;
+          father_email?: string | null;
           created_by?: string | null;
         };
         Update: Partial<{
@@ -62,6 +77,12 @@ export interface Database {
           employee_code: string | null;
           is_active: boolean;
           embedding_status: EmbeddingStatus;
+          mother_name: string | null;
+          mother_phone: string | null;
+          mother_email: string | null;
+          father_name: string | null;
+          father_phone: string | null;
+          father_email: string | null;
         }>;
         Relationships: [];
       };
@@ -129,6 +150,16 @@ export interface Database {
           checkin_greeting_template: string;
           checkout_greeting_template: string;
           enrollment_pin_hash: string | null;
+          // Kiosk timing knobs -- see supabase/migrations/0015_configurable_timings.sql.
+          online_timeout_seconds: number;
+          min_scan_gap_minutes: number;
+          sync_interval_hours: number;
+          refresh_interval_seconds: number;
+          // Offline-sync plausibility bounds -- see
+          // supabase/migrations/0017_hardening.sql. Not currently surfaced
+          // in the settings UI (sensible defaults), but part of the row.
+          max_offline_backdate_days: number;
+          clock_skew_tolerance_minutes: number;
           updated_at: string;
         };
         Insert: {
@@ -141,6 +172,12 @@ export interface Database {
           enrollment_enabled: boolean;
           checkin_greeting_template: string;
           checkout_greeting_template: string;
+          online_timeout_seconds: number;
+          min_scan_gap_minutes: number;
+          sync_interval_hours: number;
+          refresh_interval_seconds: number;
+          max_offline_backdate_days: number;
+          clock_skew_tolerance_minutes: number;
         }>;
         // enrollment_pin_hash is intentionally not updatable here -- it's
         // only ever written via the set_enrollment_pin() RPC below, so the
@@ -153,7 +190,11 @@ export interface Database {
     };
     Functions: {
       mark_attendance: {
-        Args: { p_employee_id: string; p_confidence?: number | null };
+        Args: {
+          p_employee_id: string;
+          p_confidence?: number | null;
+          p_mode?: "both" | "check_in_only" | "check_out_only";
+        };
         Returns: "check_in" | "check_out" | "already_completed";
       };
       // Kiosk-only RPCs (see 0007_kiosk_enrollment.sql) -- included here so
@@ -174,6 +215,34 @@ export interface Database {
       set_enrollment_pin: {
         Args: { p_pin: string };
         Returns: void;
+      };
+      // Offline-sync RPCs (see 0013_offline_sync.sql) -- not currently
+      // called from the admin panel (kiosk-only), included so the shared
+      // client type stays accurate.
+      sync_attendance_batch: {
+        Args: {
+          p_events: Array<{
+            employee_id: string;
+            event_type: AttendanceEventType;
+            event_date: string;
+            scanned_at: string;
+            confidence?: number | null;
+          }>;
+        };
+        Returns: Array<{
+          employee_id: string;
+          event_date: string;
+          event_type: AttendanceEventType;
+          status: "inserted" | "duplicate" | "rejected";
+        }>;
+      };
+      fetch_today_attendance: {
+        Args: Record<string, never>;
+        Returns: Array<{
+          employee_id: string;
+          event_type: AttendanceEventType;
+          scanned_at: string;
+        }>;
       };
     };
     Enums: {

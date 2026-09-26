@@ -10,23 +10,41 @@ const STATUS_STYLES: Record<EmbeddingStatus, string> = {
   failed: "bg-red-50 text-red-700",
 };
 
-export default async function EmployeesPage() {
+const PAGE_SIZE = 50;
+
+export default async function EmployeesPage({
+  searchParams,
+}: {
+  searchParams: { page?: string };
+}) {
   const supabase = createClient();
-  const { data: employees } = await supabase
+  const page = Math.max(1, Number(searchParams.page) || 1);
+  const from = (page - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
+
+  const {
+    data: employees,
+    count,
+  } = await supabase
     .from("employees")
-    .select("id, full_name, employee_code, department, is_active, embedding_status")
-    .order("created_at", { ascending: false });
+    .select("id, full_name, employee_code, department, is_active, embedding_status", {
+      count: "exact",
+    })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
 
   return (
     <div>
       <AutoRefresh />
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-slate-900">Employees</h1>
+        <h1 className="text-lg font-semibold text-slate-900">Students</h1>
         <Link
           href="/employees/new"
-          className="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+          className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500"
         >
-          Register employee
+          Register student
         </Link>
       </div>
 
@@ -67,13 +85,39 @@ export default async function EmployeesPage() {
             {employees?.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
-                  No employees registered yet.
+                  No students registered yet.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-between text-sm text-slate-600">
+          <Link
+            href={`/employees?page=${page - 1}`}
+            aria-disabled={page <= 1}
+            className={`rounded-md border border-slate-300 px-3 py-1.5 ${
+              page <= 1 ? "pointer-events-none opacity-40" : "hover:bg-slate-50"
+            }`}
+          >
+            ← Previous
+          </Link>
+          <span>
+            Page {page} of {totalPages}
+          </span>
+          <Link
+            href={`/employees?page=${page + 1}`}
+            aria-disabled={page >= totalPages}
+            className={`rounded-md border border-slate-300 px-3 py-1.5 ${
+              page >= totalPages ? "pointer-events-none opacity-40" : "hover:bg-slate-50"
+            }`}
+          >
+            Next →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

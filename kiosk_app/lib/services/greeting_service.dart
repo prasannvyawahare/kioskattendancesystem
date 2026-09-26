@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
+import 'error_logger.dart';
 import 'kiosk_settings_service.dart';
 
 /// Speaks the admin-managed check-in/check-out greeting templates
@@ -45,8 +46,17 @@ class GreetingService {
         .replaceAll('{institution}', settings.institutionName);
 
     _pendingText = text;
-    await _tts.stop();
-    await _tts.speak(text);
+    try {
+      await _tts.stop();
+      await _tts.speak(text);
+    } catch (e, st) {
+      // A TTS engine/language-pack failure on real hardware (known-risk
+      // area, see CLAUDE.md) must not become an unhandled Future rejection
+      // -- speakCheckIn/speakCheckOut are called un-awaited from
+      // CameraScreen, so nothing else would ever see this.
+      caption.value = null;
+      await ErrorLogger.log(e, stackTrace: st, context: 'GreetingService._speak');
+    }
   }
 
   String _timeGreeting() {

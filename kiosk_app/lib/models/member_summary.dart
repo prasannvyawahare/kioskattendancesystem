@@ -8,6 +8,14 @@ class MemberSummary {
     required this.code,
     required this.group,
     required this.embeddingStatus,
+    this.email,
+    this.phone,
+    this.motherName,
+    this.motherPhone,
+    this.motherEmail,
+    this.fatherName,
+    this.fatherPhone,
+    this.fatherEmail,
   });
 
   final String id;
@@ -18,6 +26,15 @@ class MemberSummary {
   /// 'pending' | 'processing' | 'completed' | 'failed'
   final String embeddingStatus;
 
+  final String? email;
+  final String? phone;
+  final String? motherName;
+  final String? motherPhone;
+  final String? motherEmail;
+  final String? fatherName;
+  final String? fatherPhone;
+  final String? fatherEmail;
+
   factory MemberSummary.fromRow(Map<String, dynamic> row) {
     return MemberSummary(
       id: row['id'] as String,
@@ -25,6 +42,14 @@ class MemberSummary {
       code: row['employee_code'] as String?,
       group: row['department'] as String?,
       embeddingStatus: row['embedding_status'] as String,
+      email: row['email'] as String?,
+      phone: row['phone'] as String?,
+      motherName: row['mother_name'] as String?,
+      motherPhone: row['mother_phone'] as String?,
+      motherEmail: row['mother_email'] as String?,
+      fatherName: row['father_name'] as String?,
+      fatherPhone: row['father_phone'] as String?,
+      fatherEmail: row['father_email'] as String?,
     );
   }
 }
