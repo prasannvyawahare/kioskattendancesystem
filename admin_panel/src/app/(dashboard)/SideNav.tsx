@@ -53,6 +53,20 @@ const NAV_ITEMS: { href: string; label: string; icon: ReactNode }[] = [
     ),
   },
   {
+    href: "/reports",
+    label: "Reports",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.5} className="h-5 w-5">
+        <path
+          d="M6.5 3.5h8l3 3v14a1 1 0 01-1 1h-10a1 1 0 01-1-1v-16a1 1 0 011-1z"
+          stroke="currentColor"
+          strokeLinejoin="round"
+        />
+        <path d="M14.5 3.5v3h3M8.5 12.5v4M12 10.5v6M15.5 14.5v2" stroke="currentColor" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
     href: "/settings",
     label: "Settings",
     icon: (

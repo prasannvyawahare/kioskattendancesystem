@@ -23,6 +23,8 @@ export async function registerEmployee(formData: FormData) {
   const phone = String(formData.get("phone") ?? "").trim() || null;
   const department = String(formData.get("department") ?? "").trim() || null;
   const employee_code = String(formData.get("employee_code") ?? "").trim() || null;
+  const standard = String(formData.get("standard") ?? "").trim() || null;
+  const section = String(formData.get("section") ?? "").trim() || null;
   const mother_name = String(formData.get("mother_name") ?? "").trim() || null;
   const mother_phone = String(formData.get("mother_phone") ?? "").trim() || null;
   const mother_email = String(formData.get("mother_email") ?? "").trim() || null;
@@ -50,6 +52,8 @@ export async function registerEmployee(formData: FormData) {
       phone,
       department,
       employee_code,
+      standard,
+      section,
       mother_name,
       mother_phone,
       mother_email,
@@ -94,6 +98,8 @@ export async function updateEmployee(employeeId: string, formData: FormData) {
   const phone = String(formData.get("phone") ?? "").trim() || null;
   const department = String(formData.get("department") ?? "").trim() || null;
   const employee_code = String(formData.get("employee_code") ?? "").trim() || null;
+  const standard = String(formData.get("standard") ?? "").trim() || null;
+  const section = String(formData.get("section") ?? "").trim() || null;
   const mother_name = String(formData.get("mother_name") ?? "").trim() || null;
   const mother_phone = String(formData.get("mother_phone") ?? "").trim() || null;
   const mother_email = String(formData.get("mother_email") ?? "").trim() || null;
@@ -113,6 +119,8 @@ export async function updateEmployee(employeeId: string, formData: FormData) {
       phone,
       department,
       employee_code,
+      standard,
+      section,
       mother_name,
       mother_phone,
       mother_email,

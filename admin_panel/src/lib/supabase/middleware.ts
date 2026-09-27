@@ -35,26 +35,18 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profile?.role !== "admin") {
-      await supabase.auth.signOut();
-      const url = request.nextUrl.clone();
-      url.pathname = "/login";
-      url.searchParams.set("error", "not_authorized");
-      return NextResponse.redirect(url);
-    }
-
-    if (isLoginPage) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/dashboard";
-      return NextResponse.redirect(url);
-    }
+  // The profiles.role check (is this an admin, not e.g. the kiosk service
+  // account?) used to run here too, but middleware runs on every single
+  // request -- including the RSC-payload fetch behind every sidebar click --
+  // while (dashboard)/layout.tsx's own check only runs once per dashboard
+  // visit (Next.js's client router cache reuses the rendered layout across
+  // sibling-route navigations). Doing an extra Postgres round-trip here on
+  // every click was making navigation feel slow, so the role check now lives
+  // solely in the layout; middleware only handles the auth redirect.
+  if (user && isLoginPage) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
+    return NextResponse.redirect(url);
   }
 
   return supabaseResponse;

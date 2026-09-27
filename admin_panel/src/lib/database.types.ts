@@ -38,6 +38,9 @@ export interface Database {
           phone: string | null;
           department: string | null;
           employee_code: string | null;
+          // Class/grade and section -- see supabase/migrations/0019_standard_section.sql.
+          standard: string | null;
+          section: string | null;
           is_active: boolean;
           embedding_status: EmbeddingStatus;
           // Parent/guardian contacts -- see supabase/migrations/0016_parent_contacts.sql.
@@ -59,6 +62,8 @@ export interface Database {
           phone?: string | null;
           department?: string | null;
           employee_code?: string | null;
+          standard?: string | null;
+          section?: string | null;
           is_active?: boolean;
           embedding_status?: EmbeddingStatus;
           mother_name?: string | null;
@@ -75,6 +80,8 @@ export interface Database {
           phone: string | null;
           department: string | null;
           employee_code: string | null;
+          standard: string | null;
+          section: string | null;
           is_active: boolean;
           embedding_status: EmbeddingStatus;
           mother_name: string | null;

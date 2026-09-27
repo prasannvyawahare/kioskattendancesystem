@@ -22,10 +22,17 @@ export default async function EmployeeDetailPage({
 
   if (!employee) notFound();
 
-  const { data: photoRows } = await supabase
-    .from("employee_photos")
-    .select("id, storage_path")
-    .eq("employee_id", employee.id);
+  // Independent queries -- run concurrently rather than paying two
+  // sequential Supabase round-trips back to back.
+  const [{ data: photoRows }, { data: attendance }] = await Promise.all([
+    supabase.from("employee_photos").select("id, storage_path").eq("employee_id", employee.id),
+    supabase
+      .from("attendance_logs")
+      .select("event_type, event_date, scanned_at")
+      .eq("employee_id", employee.id)
+      .order("scanned_at", { ascending: false })
+      .limit(20),
+  ]);
 
   const photos = await Promise.all(
     (photoRows ?? []).map(async (photo) => {
@@ -35,13 +42,6 @@ export default async function EmployeeDetailPage({
       return { id: photo.id, url: data?.signedUrl };
     }),
   );
-
-  const { data: attendance } = await supabase
-    .from("attendance_logs")
-    .select("event_type, event_date, scanned_at")
-    .eq("employee_id", employee.id)
-    .order("scanned_at", { ascending: false })
-    .limit(20);
 
   return (
     <div className="space-y-8">
@@ -53,7 +53,9 @@ export default async function EmployeeDetailPage({
         <div>
           <h1 className="text-lg font-semibold text-slate-900">{employee.full_name}</h1>
           <p className="text-sm text-slate-500">
-            {employee.employee_code ?? "No code"} · {employee.department ?? "No department"}
+            {employee.employee_code ?? "No code"} · {employee.department ?? "No department"} ·{" "}
+            {employee.standard ? `Standard ${employee.standard}` : "No standard"}
+            {employee.section ? ` - ${employee.section}` : ""}
           </p>
         </div>
         <div className="flex items-center gap-4">

@@ -15,6 +15,22 @@ export default async function DashboardLayout({
 
   if (!user) redirect("/login");
 
+  // Moved here from middleware.ts: middleware runs on every request
+  // (including the RSC-payload fetch behind every sidebar click), while this
+  // layout only re-runs once per dashboard visit thanks to Next.js's client
+  // router cache -- so the same authorization check no longer costs a
+  // Postgres round-trip on every navigation.
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (profile?.role !== "admin") {
+    await supabase.auth.signOut();
+    redirect("/login?error=not_authorized");
+  }
+
   return (
     <div className="flex min-h-screen bg-slate-50">
       {/* Desktop sidebar */}

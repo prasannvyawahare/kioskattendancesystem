@@ -10,6 +10,8 @@ class MemberSummary {
     required this.embeddingStatus,
     this.email,
     this.phone,
+    this.standard,
+    this.section,
     this.motherName,
     this.motherPhone,
     this.motherEmail,
@@ -28,6 +30,8 @@ class MemberSummary {
 
   final String? email;
   final String? phone;
+  final String? standard;
+  final String? section;
   final String? motherName;
   final String? motherPhone;
   final String? motherEmail;
@@ -44,6 +48,8 @@ class MemberSummary {
       embeddingStatus: row['embedding_status'] as String,
       email: row['email'] as String?,
       phone: row['phone'] as String?,
+      standard: row['standard'] as String?,
+      section: row['section'] as String?,
       motherName: row['mother_name'] as String?,
       motherPhone: row['mother_phone'] as String?,
       motherEmail: row['mother_email'] as String?,
