@@ -71,39 +71,69 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
   int _consecutiveDetections = 0;
   bool _busy = false;
   bool _cameraReady = false;
+  bool _cameraOpening = false;
   bool _submitting = false;
   DateTime? _cooldownUntil;
   String? _error;
 
-  @override
-  void initState() {
-    super.initState();
-    _setupCamera();
+  Future<void> _openCamera() async {
+    if (_cameraOpening || _cameraReady) return;
+    setState(() {
+      _cameraOpening = true;
+      _error = null;
+    });
+
+    try {
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _error = 'No camera found on this device.';
+          _cameraOpening = false;
+        });
+        return;
+      }
+      _camera = cameras.firstWhere(
+        (c) => c.lensDirection == CameraLensDirection.front,
+        orElse: () => cameras.first,
+      );
+
+      final controller = CameraController(
+        _camera!,
+        ResolutionPreset.medium,
+        enableAudio: false,
+        imageFormatGroup: ImageFormatGroup.yuv420,
+      );
+      _controller = controller;
+      await controller.initialize();
+      await controller.startImageStream(_onFrame);
+
+      if (!mounted) return;
+      setState(() {
+        _cameraReady = true;
+        _cameraOpening = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Could not open camera: $e';
+        _cameraOpening = false;
+      });
+    }
   }
 
-  Future<void> _setupCamera() async {
-    final cameras = await availableCameras();
-    if (cameras.isEmpty) {
-      setState(() => _error = 'No camera found on this device.');
-      return;
-    }
-    _camera = cameras.firstWhere(
-      (c) => c.lensDirection == CameraLensDirection.front,
-      orElse: () => cameras.first,
-    );
-
-    final controller = CameraController(
-      _camera!,
-      ResolutionPreset.medium,
-      enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.yuv420,
-    );
-    _controller = controller;
-    await controller.initialize();
-    await controller.startImageStream(_onFrame);
-
+  Future<void> _closeCamera() async {
+    final controller = _controller;
+    _controller = null;
+    _camera = null;
     if (!mounted) return;
-    setState(() => _cameraReady = true);
+    setState(() => _cameraReady = false);
+    if (controller != null) {
+      if (controller.value.isStreamingImages) {
+        await controller.stopImageStream();
+      }
+      await controller.dispose();
+    }
   }
 
   void _onFrame(CameraImage image) {
@@ -141,6 +171,9 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
         _captures.add(_Capture(jpegBytes: jpegBytes, embedding: embedding));
         _cooldownUntil = DateTime.now().add(_captureCooldown);
       });
+      if (_captures.length >= _maxPhotos) {
+        await _closeCamera();
+      }
     } catch (_) {
       // Transient decode/embed failure -- just skip this frame and let the
       // stability counter build back up on the next one.
@@ -221,7 +254,13 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
 
   @override
   void dispose() {
-    _controller?.dispose();
+    final controller = _controller;
+    if (controller != null) {
+      if (controller.value.isStreamingImages) {
+        controller.stopImageStream();
+      }
+      controller.dispose();
+    }
     _detector.close();
     _nameController.dispose();
     _codeController.dispose();
@@ -348,7 +387,7 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
                     aspectRatio: 3 / 4,
                     child: Container(
                       color: Colors.black,
-                      child: controller != null && controller.value.isInitialized
+                      child: _cameraReady && controller != null && controller.value.isInitialized
                           ? Stack(
                               fit: StackFit.expand,
                               children: [
@@ -367,9 +406,40 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
                                       ),
                                     ),
                                   ),
+                                Positioned(
+                                  top: 8,
+                                  right: 8,
+                                  child: FilledButton.tonalIcon(
+                                    onPressed: _closeCamera,
+                                    icon: const Icon(Icons.close),
+                                    label: const Text('Close camera'),
+                                  ),
+                                ),
                               ],
                             )
-                          : const Center(child: CircularProgressIndicator()),
+                          : Center(
+                              child: _cameraOpening
+                                  ? const CircularProgressIndicator()
+                                  : Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.photo_camera_outlined,
+                                          size: 40,
+                                          color: Colors.white70,
+                                        ),
+                                        const SizedBox(height: 12),
+                                        FilledButton.icon(
+                                          onPressed:
+                                              _captures.length >= _maxPhotos ? null : _openCamera,
+                                          icon: const Icon(Icons.camera_alt),
+                                          label: Text(
+                                            _captures.isEmpty ? 'Open camera' : 'Add more photos',
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                            ),
                     ),
                   ),
                 ),
@@ -419,7 +489,7 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
                   ),
                 const SizedBox(height: 20),
                 FilledButton(
-                  onPressed: _submitting || !_cameraReady ? null : _submit,
+                  onPressed: _submitting ? null : _submit,
                   child: _submitting
                       ? const SizedBox(
                           width: 20,
