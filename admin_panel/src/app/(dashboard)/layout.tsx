@@ -32,8 +32,8 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-[#F3F4FB]">
-      {/* Desktop sidebar */}
+    <div className="flex h-screen overflow-hidden bg-[#F3F4FB]">
+      {/* Desktop sidebar -- fixed to the viewport height, never scrolls with content */}
       <aside className="relative hidden w-64 shrink-0 flex-col overflow-hidden bg-gradient-to-b from-[#4C3494] via-[#5B3FA0] to-[#2E2158] md:flex print:hidden">
         {/* Decorative background blobs -- purely visual, sits behind everything. */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
@@ -67,7 +67,10 @@ export default async function DashboardLayout({
             <span className="block text-xs text-white/50">Kiosk console</span>
           </div>
         </div>
-        <SideNav variant="sidebar" className="relative flex flex-1 flex-col gap-1 px-4 py-2" />
+        <SideNav
+          variant="sidebar"
+          className="relative flex flex-1 flex-col gap-1 overflow-y-auto px-4 py-2"
+        />
         <div className="relative mx-4 mb-4 rounded-2xl bg-white/10 p-3 backdrop-blur-sm">
           <p className="truncate px-1 pb-2 text-xs text-white/60">{user.email}</p>
           <form action={signOut}>
@@ -81,9 +84,9 @@ export default async function DashboardLayout({
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Mobile top bar + horizontal nav (sidebar only shows md and up) */}
-        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:hidden print:hidden">
+        <header className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:hidden print:hidden">
           <span className="flex items-center gap-2 font-semibold text-slate-900">
             <span className="h-2 w-2 rounded-full bg-violet-600" aria-hidden />
             Attendance Admin
@@ -96,10 +99,13 @@ export default async function DashboardLayout({
         </header>
         <SideNav
           variant="mobile"
-          className="flex gap-1 overflow-x-auto border-b border-slate-200 bg-white px-3 py-2 md:hidden print:hidden"
+          className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-white px-3 py-2 md:hidden print:hidden"
         />
 
-        <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-8">{children}</main>
+        {/* Only this pane scrolls -- the sidebar (and mobile header/nav) stay put. */}
+        <main className="mx-auto w-full max-w-7xl flex-1 overflow-y-auto px-6 py-8">
+          {children}
+        </main>
       </div>
     </div>
   );

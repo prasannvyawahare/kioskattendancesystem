@@ -4,12 +4,17 @@ import { GenerateReportPdfButton } from "./generate-report-pdf-button";
 import { StudentFilterFields } from "@/components/StudentFilterFields";
 import { pad } from "@/lib/date-utils";
 import { isNonWorkingDay } from "@/lib/attendance-status";
-import { applyStudentFilters, distinctValues, filterQueryString } from "@/lib/student-filters";
+import {
+  applyStudentFilters,
+  distinctValues,
+  filterQueryString,
+  parseCombinedFilter,
+} from "@/lib/student-filters";
 
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: { month?: string; department?: string; standard?: string; section?: string };
+  searchParams: { month?: string; filter?: string };
 }) {
   const supabase = createClient();
   const now = new Date();
@@ -40,11 +45,7 @@ export default async function ReportsPage({
     year: "numeric",
   });
 
-  const filters = {
-    department: searchParams.department,
-    standard: searchParams.standard,
-    section: searchParams.section,
-  };
+  const filters = parseCombinedFilter(searchParams.filter);
   const filterQuery = filterQueryString(filters);
 
   const studentsQuery = applyStudentFilters(
@@ -147,9 +148,7 @@ export default async function ReportsPage({
           departments={departments}
           standards={standards}
           sections={sections}
-          department={searchParams.department}
-          standard={searchParams.standard}
-          section={searchParams.section}
+          filters={filters}
         />
         <button
           type="submit"

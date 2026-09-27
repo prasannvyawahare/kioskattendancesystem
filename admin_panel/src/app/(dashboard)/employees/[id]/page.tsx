@@ -5,6 +5,7 @@ import { toggleActive, resetEmbeddings } from "../actions";
 import { DeleteEmployeeButton } from "./DeleteEmployeeButton";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { eventTypeLabel } from "@/lib/attendance-status";
+import { formatDateTime } from "@/lib/date-utils";
 
 export default async function EmployeeDetailPage({
   params,
@@ -174,7 +175,7 @@ export default async function EmployeeDetailPage({
           {attendance?.map((row, i) => (
             <li key={i} className="flex items-center justify-between py-2">
               <span className="text-slate-700">{eventTypeLabel(row.event_type)}</span>
-              <span className="text-slate-500">{new Date(row.scanned_at).toLocaleString()}</span>
+              <span className="text-slate-500">{formatDateTime(row.scanned_at)}</span>
             </li>
           ))}
           {attendance?.length === 0 && (

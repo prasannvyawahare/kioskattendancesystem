@@ -5,12 +5,17 @@ import { MonthCalendar, type CalendarCell } from "@/components/MonthCalendar";
 import { StudentFilterFields } from "@/components/StudentFilterFields";
 import { pad, todayIso } from "@/lib/date-utils";
 import { isNonWorkingDay } from "@/lib/attendance-status";
-import { applyStudentFilters, distinctValues, filterQueryString } from "@/lib/student-filters";
+import {
+  applyStudentFilters,
+  distinctValues,
+  filterQueryString,
+  parseCombinedFilter,
+} from "@/lib/student-filters";
 
 export default async function AttendanceRegisterPage({
   searchParams,
 }: {
-  searchParams: { month?: string; department?: string; standard?: string; section?: string };
+  searchParams: { month?: string; filter?: string };
 }) {
   const supabase = createClient();
   const now = new Date();
@@ -37,11 +42,7 @@ export default async function AttendanceRegisterPage({
   const prevMonthValue = `${prevDate.getFullYear()}-${pad(prevDate.getMonth() + 1)}`;
   const nextMonthValue = `${nextDate.getFullYear()}-${pad(nextDate.getMonth() + 1)}`;
 
-  const filters = {
-    department: searchParams.department,
-    standard: searchParams.standard,
-    section: searchParams.section,
-  };
+  const filters = parseCombinedFilter(searchParams.filter);
   const filterQuery = filterQueryString(filters);
 
   const { data: allActive } = await supabase
@@ -199,9 +200,7 @@ export default async function AttendanceRegisterPage({
             departments={departments}
             standards={standards}
             sections={sections}
-            department={searchParams.department}
-            standard={searchParams.standard}
-            section={searchParams.section}
+            filters={filters}
           />
           <button
             type="submit"
