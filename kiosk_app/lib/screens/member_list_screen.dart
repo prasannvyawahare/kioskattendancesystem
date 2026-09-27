@@ -116,6 +116,8 @@ class _MemberListScreenState extends State<MemberListScreen> {
     final groupController = TextEditingController(text: member.group ?? '');
     final emailController = TextEditingController(text: member.email ?? '');
     final phoneController = TextEditingController(text: member.phone ?? '');
+    final standardController = TextEditingController(text: member.standard ?? '');
+    final sectionController = TextEditingController(text: member.section ?? '');
     final motherNameController = TextEditingController(text: member.motherName ?? '');
     final motherPhoneController = TextEditingController(text: member.motherPhone ?? '');
     final motherEmailController = TextEditingController(text: member.motherEmail ?? '');
@@ -158,6 +160,14 @@ class _MemberListScreenState extends State<MemberListScreen> {
                     controller: phoneController,
                     decoration: const InputDecoration(labelText: 'Phone (optional)'),
                     keyboardType: TextInputType.phone,
+                  ),
+                  TextFormField(
+                    controller: standardController,
+                    decoration: const InputDecoration(labelText: 'Standard (optional)'),
+                  ),
+                  TextFormField(
+                    controller: sectionController,
+                    decoration: const InputDecoration(labelText: 'Section (optional)'),
                   ),
                   const SizedBox(height: 16),
                   Align(
@@ -228,6 +238,8 @@ class _MemberListScreenState extends State<MemberListScreen> {
         group: groupController.text.trim().isEmpty ? null : groupController.text.trim(),
         email: emailController.text.trim().isEmpty ? null : emailController.text.trim(),
         phone: phoneController.text.trim().isEmpty ? null : phoneController.text.trim(),
+        standard: standardController.text.trim().isEmpty ? null : standardController.text.trim(),
+        section: sectionController.text.trim().isEmpty ? null : sectionController.text.trim(),
         motherName:
             motherNameController.text.trim().isEmpty ? null : motherNameController.text.trim(),
         motherPhone:
@@ -357,6 +369,8 @@ class _MemberListScreenState extends State<MemberListScreen> {
           subtitle: Text([
             if (member.code != null && member.code!.isNotEmpty) member.code!,
             if (member.group != null && member.group!.isNotEmpty) member.group!,
+            if (member.standard != null && member.standard!.isNotEmpty) member.standard!,
+            if (member.section != null && member.section!.isNotEmpty) member.section!,
           ].join(' · ')),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,

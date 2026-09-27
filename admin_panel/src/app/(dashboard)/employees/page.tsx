@@ -15,25 +15,37 @@ const PAGE_SIZE = 50;
 export default async function EmployeesPage({
   searchParams,
 }: {
-  searchParams: { page?: string };
+  searchParams: { page?: string; department?: string };
 }) {
   const supabase = createClient();
   const page = Math.max(1, Number(searchParams.page) || 1);
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
+  const department = searchParams.department?.trim() || "";
 
-  const {
-    data: employees,
-    count,
-  } = await supabase
+  let listQuery = supabase
     .from("employees")
-    .select("id, full_name, employee_code, department, is_active, embedding_status", {
+    .select("id, full_name, employee_code, department, standard, section, is_active, embedding_status", {
       count: "exact",
     })
-    .order("created_at", { ascending: false })
-    .range(from, to);
+    .order("created_at", { ascending: false });
+  if (department) {
+    listQuery = listQuery.eq("department", department);
+  }
+
+  // Independent queries -- run concurrently rather than paying two
+  // sequential Supabase round-trips back to back.
+  const [{ data: departmentRows }, { data: employees, count }] = await Promise.all([
+    supabase.from("employees").select("department").not("department", "is", null),
+    listQuery.range(from, to),
+  ]);
+  const departments = Array.from(
+    new Set((departmentRows ?? []).map((row) => row.department).filter(Boolean) as string[]),
+  ).sort((a, b) => a.localeCompare(b));
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
+  const pageHref = (targetPage: number) =>
+    `/employees?page=${targetPage}${department ? `&department=${encodeURIComponent(department)}` : ""}`;
 
   return (
     <div>
@@ -48,6 +60,38 @@ export default async function EmployeesPage({
         </Link>
       </div>
 
+      <form className="mt-4 flex items-end gap-3" method="get">
+        <div className="space-y-1">
+          <label htmlFor="department" className="text-sm font-medium text-slate-700">
+            Department
+          </label>
+          <select
+            id="department"
+            name="department"
+            defaultValue={department}
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+          >
+            <option value="">All departments</option>
+            {departments.map((dept) => (
+              <option key={dept} value={dept}>
+                {dept}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="submit"
+          className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Filter
+        </button>
+        {department && (
+          <Link href="/employees" className="text-sm text-slate-500 hover:text-slate-900">
+            Clear filter
+          </Link>
+        )}
+      </form>
+
       <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white">
         <table className="w-full text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
@@ -55,6 +99,8 @@ export default async function EmployeesPage({
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Code</th>
               <th className="px-4 py-3 font-medium">Department</th>
+              <th className="px-4 py-3 font-medium">Standard</th>
+              <th className="px-4 py-3 font-medium">Section</th>
               <th className="px-4 py-3 font-medium">Recognition status</th>
               <th className="px-4 py-3 font-medium">Active</th>
             </tr>
@@ -72,6 +118,8 @@ export default async function EmployeesPage({
                 </td>
                 <td className="px-4 py-3 text-slate-600">{employee.employee_code ?? "-"}</td>
                 <td className="px-4 py-3 text-slate-600">{employee.department ?? "-"}</td>
+                <td className="px-4 py-3 text-slate-600">{employee.standard ?? "-"}</td>
+                <td className="px-4 py-3 text-slate-600">{employee.section ?? "-"}</td>
                 <td className="px-4 py-3">
                   <span
                     className={`rounded-full px-2 py-1 text-xs font-medium ${STATUS_STYLES[employee.embedding_status]}`}
@@ -84,7 +132,7 @@ export default async function EmployeesPage({
             ))}
             {employees?.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                   No students registered yet.
                 </td>
               </tr>
@@ -96,7 +144,7 @@ export default async function EmployeesPage({
       {totalPages > 1 && (
         <div className="mt-4 flex items-center justify-between text-sm text-slate-600">
           <Link
-            href={`/employees?page=${page - 1}`}
+            href={pageHref(page - 1)}
             aria-disabled={page <= 1}
             className={`rounded-md border border-slate-300 px-3 py-1.5 ${
               page <= 1 ? "pointer-events-none opacity-40" : "hover:bg-slate-50"
@@ -108,7 +156,7 @@ export default async function EmployeesPage({
             Page {page} of {totalPages}
           </span>
           <Link
-            href={`/employees?page=${page + 1}`}
+            href={pageHref(page + 1)}
             aria-disabled={page >= totalPages}
             className={`rounded-md border border-slate-300 px-3 py-1.5 ${
               page >= totalPages ? "pointer-events-none opacity-40" : "hover:bg-slate-50"

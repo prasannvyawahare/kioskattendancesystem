@@ -112,6 +112,8 @@ export function RegisterEmployeeForm() {
         <Field label="Email" name="email" type="email" />
         <Field label="Phone" name="phone" />
         <Field label="Department" name="department" />
+        <Field label="Standard" name="standard" />
+        <Field label="Section" name="section" />
       </div>
 
       <div className="space-y-4 rounded-xl border border-slate-200 p-4">

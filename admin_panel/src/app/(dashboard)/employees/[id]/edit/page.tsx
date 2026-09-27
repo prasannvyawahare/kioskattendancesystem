@@ -40,6 +40,8 @@ export default async function EditEmployeePage({
           <Field label="Email" name="email" type="email" defaultValue={employee.email} />
           <Field label="Phone" name="phone" defaultValue={employee.phone} />
           <Field label="Department" name="department" defaultValue={employee.department} />
+          <Field label="Standard" name="standard" defaultValue={employee.standard} />
+          <Field label="Section" name="section" defaultValue={employee.section} />
         </div>
 
         <div className="space-y-4 rounded-xl border border-slate-200 p-4">

@@ -13,28 +13,6 @@ export default async function AttendancePage({
 }) {
   const supabase = createClient();
 
-  const { data: employees } = await supabase
-    .from("employees")
-    .select("id, full_name")
-    .order("full_name");
-
-  let query = supabase
-    .from("attendance_logs")
-    .select("id, employee_id, event_type, event_date, scanned_at, confidence")
-    .order("scanned_at", { ascending: false })
-    .limit(200);
-
-  if (searchParams.date) query = query.eq("event_date", searchParams.date);
-  if (searchParams.employee_id) query = query.eq("employee_id", searchParams.employee_id);
-
-  const { data: logs } = await query;
-
-  const nameById = new Map((employees ?? []).map((e) => [e.id, e.full_name]));
-  const rows = (logs ?? []).map((log) => ({
-    ...log,
-    employee_name: nameById.get(log.employee_id) ?? "Unknown",
-  }));
-
   // Calendar month defaults to the active date filter's month, else the
   // current month; navigated independently via ?cal= so browsing months
   // doesn't disturb the table's own date filter until a day is clicked.
@@ -64,12 +42,32 @@ export default async function AttendancePage({
     year: "numeric",
   });
 
-  const { data: calLogs } = await supabase
+  let logsQuery = supabase
     .from("attendance_logs")
-    .select("employee_id, event_date")
-    .in("event_type", ["check_in", "check_out"])
-    .gte("event_date", calMonthStart)
-    .lte("event_date", calMonthEnd);
+    .select("id, employee_id, event_type, event_date, scanned_at, confidence")
+    .order("scanned_at", { ascending: false })
+    .limit(200);
+  if (searchParams.date) logsQuery = logsQuery.eq("event_date", searchParams.date);
+  if (searchParams.employee_id) logsQuery = logsQuery.eq("employee_id", searchParams.employee_id);
+
+  // Independent queries -- run concurrently rather than paying three
+  // sequential Supabase round-trips back to back.
+  const [{ data: employees }, { data: logs }, { data: calLogs }] = await Promise.all([
+    supabase.from("employees").select("id, full_name").order("full_name"),
+    logsQuery,
+    supabase
+      .from("attendance_logs")
+      .select("employee_id, event_date")
+      .in("event_type", ["check_in", "check_out"])
+      .gte("event_date", calMonthStart)
+      .lte("event_date", calMonthEnd),
+  ]);
+
+  const nameById = new Map((employees ?? []).map((e) => [e.id, e.full_name]));
+  const rows = (logs ?? []).map((log) => ({
+    ...log,
+    employee_name: nameById.get(log.employee_id) ?? "Unknown",
+  }));
 
   const presentByDay = new Map<number, Set<string>>();
   for (const log of calLogs ?? []) {

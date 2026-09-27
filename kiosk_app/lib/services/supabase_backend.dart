@@ -161,7 +161,7 @@ class SupabaseBackend implements KioskBackend {
     final rows = await _client
         .from('employees')
         .select(
-          'id, full_name, employee_code, department, email, phone, '
+          'id, full_name, employee_code, department, email, phone, standard, section, '
           'mother_name, mother_phone, mother_email, '
           'father_name, father_phone, father_email, embedding_status',
         )
@@ -196,6 +196,8 @@ class SupabaseBackend implements KioskBackend {
     String? group,
     String? email,
     String? phone,
+    String? standard,
+    String? section,
     String? motherName,
     String? motherPhone,
     String? motherEmail,
@@ -210,6 +212,8 @@ class SupabaseBackend implements KioskBackend {
       'p_group': group,
       'p_email': email,
       'p_phone': phone,
+      'p_standard': standard,
+      'p_section': section,
       'p_mother_name': motherName,
       'p_mother_phone': motherPhone,
       'p_mother_email': motherEmail,
@@ -231,6 +235,8 @@ class SupabaseBackend implements KioskBackend {
     String? group,
     String? email,
     String? phone,
+    String? standard,
+    String? section,
     String? motherName,
     String? motherPhone,
     String? motherEmail,
@@ -246,6 +252,8 @@ class SupabaseBackend implements KioskBackend {
       'p_group': group,
       'p_email': email,
       'p_phone': phone,
+      'p_standard': standard,
+      'p_section': section,
       'p_mother_name': motherName,
       'p_mother_phone': motherPhone,
       'p_mother_email': motherEmail,

@@ -52,6 +52,8 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
   final _groupController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _standardController = TextEditingController();
+  final _sectionController = TextEditingController();
   final _motherNameController = TextEditingController();
   final _motherPhoneController = TextEditingController();
   final _motherEmailController = TextEditingController();
@@ -169,6 +171,9 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
         group: _groupController.text.trim().isEmpty ? null : _groupController.text.trim(),
         email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
         phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+        standard:
+            _standardController.text.trim().isEmpty ? null : _standardController.text.trim(),
+        section: _sectionController.text.trim().isEmpty ? null : _sectionController.text.trim(),
         motherName:
             _motherNameController.text.trim().isEmpty ? null : _motherNameController.text.trim(),
         motherPhone: _motherPhoneController.text.trim().isEmpty
@@ -223,6 +228,8 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
     _groupController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
+    _standardController.dispose();
+    _sectionController.dispose();
     _motherNameController.dispose();
     _motherPhoneController.dispose();
     _motherEmailController.dispose();
@@ -272,6 +279,16 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
                   controller: _phoneController,
                   decoration: const InputDecoration(labelText: 'Phone (optional)'),
                   keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _standardController,
+                  decoration: const InputDecoration(labelText: 'Standard (optional)'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _sectionController,
+                  decoration: const InputDecoration(labelText: 'Section (optional)'),
                 ),
                 const SizedBox(height: 20),
                 Text('Parent / guardian details', style: Theme.of(context).textTheme.titleMedium),

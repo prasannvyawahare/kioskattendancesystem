@@ -7,19 +7,22 @@ export default async function DashboardPage() {
   const supabase = createClient();
   const today = new Date().toISOString().slice(0, 10);
 
-  const { data: todayLogs } = await supabase
-    .from("attendance_logs")
-    .select("id, employee_id, event_type, scanned_at")
-    .eq("event_date", today)
-    .order("scanned_at", { ascending: false });
-
-  // Full active roster (not just today's scanners) -- needed to figure out
-  // who *hasn't* shown up yet and to break attendance down by department.
-  const { data: activeEmployees } = await supabase
-    .from("employees")
-    .select("id, full_name, department")
-    .eq("is_active", true)
-    .order("full_name");
+  // Independent queries -- run concurrently rather than paying two
+  // sequential Supabase round-trips back to back.
+  const [{ data: todayLogs }, { data: activeEmployees }] = await Promise.all([
+    supabase
+      .from("attendance_logs")
+      .select("id, employee_id, event_type, scanned_at")
+      .eq("event_date", today)
+      .order("scanned_at", { ascending: false }),
+    // Full active roster (not just today's scanners) -- needed to figure out
+    // who *hasn't* shown up yet and to break attendance down by department.
+    supabase
+      .from("employees")
+      .select("id, full_name, department")
+      .eq("is_active", true)
+      .order("full_name"),
+  ]);
 
   const nameById = new Map((activeEmployees ?? []).map((e) => [e.id, e.full_name]));
   const logsWithNames = (todayLogs ?? []).map((log) => ({
