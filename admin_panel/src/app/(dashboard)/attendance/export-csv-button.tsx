@@ -1,6 +1,7 @@
 "use client";
 
 import { eventTypeLabel } from "@/lib/attendance-status";
+import { formatTime } from "@/lib/date-utils";
 
 type Row = {
   employee_name: string;
@@ -17,7 +18,7 @@ export function ExportCsvButton({ rows }: { rows: Row[] }) {
       row.employee_name,
       eventTypeLabel(row.event_type),
       row.event_date,
-      new Date(row.scanned_at).toLocaleTimeString(),
+      formatTime(row.scanned_at),
       row.confidence != null ? row.confidence.toFixed(2) : "",
     ]);
     const csv = [header, ...csvRows]

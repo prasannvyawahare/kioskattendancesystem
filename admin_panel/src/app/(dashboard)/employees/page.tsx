@@ -2,6 +2,13 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { EmbeddingStatus } from "@/lib/database.types";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { StudentFilterFields } from "@/components/StudentFilterFields";
+import {
+  applyStudentFilters,
+  distinctValues,
+  filterQueryString,
+  parseCombinedFilter,
+} from "@/lib/student-filters";
 
 const STATUS_STYLES: Record<EmbeddingStatus, string> = {
   pending: "bg-amber-50 text-amber-700",
@@ -10,42 +17,50 @@ const STATUS_STYLES: Record<EmbeddingStatus, string> = {
   failed: "bg-red-50 text-red-700",
 };
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 20;
 
 export default async function EmployeesPage({
   searchParams,
 }: {
-  searchParams: { page?: string; department?: string };
+  searchParams: { page?: string; filter?: string };
 }) {
   const supabase = createClient();
   const page = Math.max(1, Number(searchParams.page) || 1);
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
-  const department = searchParams.department?.trim() || "";
 
-  let listQuery = supabase
-    .from("employees")
-    .select("id, full_name, employee_code, department, standard, section, is_active, embedding_status", {
-      count: "exact",
-    })
-    .order("created_at", { ascending: false });
-  if (department) {
-    listQuery = listQuery.eq("department", department);
-  }
+  const filters = parseCombinedFilter(searchParams.filter);
+  const filterQuery = filterQueryString(filters);
+  const hasFilters = Boolean(filters.department || filters.standard || filters.section);
+
+  const listQuery = applyStudentFilters(
+    supabase
+      .from("employees")
+      .select("id, full_name, employee_code, department, standard, section, is_active, embedding_status", {
+        count: "exact",
+      })
+      .order("created_at", { ascending: false }),
+    filters,
+  );
 
   // Independent queries -- run concurrently rather than paying two
-  // sequential Supabase round-trips back to back.
-  const [{ data: departmentRows }, { data: employees, count }] = await Promise.all([
-    supabase.from("employees").select("department").not("department", "is", null),
+  // sequential Supabase round-trips back to back. Options are drawn from the
+  // full roster (not just active students), matching the list below which
+  // also isn't restricted to active-only.
+  const [{ data: allRows }, { data: employees, count }] = await Promise.all([
+    supabase.from("employees").select("department, standard, section"),
     listQuery.range(from, to),
   ]);
-  const departments = Array.from(
-    new Set((departmentRows ?? []).map((row) => row.department).filter(Boolean) as string[]),
-  ).sort((a, b) => a.localeCompare(b));
+  const departments = distinctValues(allRows, "department");
+  const standards = distinctValues(allRows, "standard");
+  const sections = distinctValues(allRows, "section");
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
-  const pageHref = (targetPage: number) =>
-    `/employees?page=${targetPage}${department ? `&department=${encodeURIComponent(department)}` : ""}`;
+  const pageHref = (targetPage: number) => {
+    const params = new URLSearchParams(filterQuery);
+    params.set("page", String(targetPage));
+    return `/employees?${params.toString()}`;
+  };
 
   return (
     <div>
@@ -60,32 +75,20 @@ export default async function EmployeesPage({
         </Link>
       </div>
 
-      <form className="mt-4 flex items-end gap-3" method="get">
-        <div className="space-y-1">
-          <label htmlFor="department" className="text-sm font-medium text-slate-700">
-            Department
-          </label>
-          <select
-            id="department"
-            name="department"
-            defaultValue={department}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-          >
-            <option value="">All departments</option>
-            {departments.map((dept) => (
-              <option key={dept} value={dept}>
-                {dept}
-              </option>
-            ))}
-          </select>
-        </div>
+      <form className="mt-4 flex flex-wrap items-end gap-3" method="get">
+        <StudentFilterFields
+          departments={departments}
+          standards={standards}
+          sections={sections}
+          filters={filters}
+        />
         <button
           type="submit"
           className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
           Filter
         </button>
-        {department && (
+        {hasFilters && (
           <Link href="/employees" className="text-sm text-slate-500 hover:text-slate-900">
             Clear filter
           </Link>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { AttendanceEventType } from "@/lib/database.types";
 import { eventTypeLabel } from "@/lib/attendance-status";
+import { formatTime } from "@/lib/date-utils";
 
 type LogRow = {
   id: string;
@@ -106,7 +107,7 @@ export function LiveAttendanceFeed({
               {eventTypeLabel(log.event_type)}
             </span>
             <span className="w-16 shrink-0 text-right text-slate-500">
-              {new Date(log.scanned_at).toLocaleTimeString()}
+              {formatTime(log.scanned_at)}
             </span>
           </li>
         ))}

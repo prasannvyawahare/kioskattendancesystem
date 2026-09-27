@@ -5,9 +5,19 @@ import { DeleteLogButton } from "./DeleteLogButton";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { MonthCalendar, type CalendarCell } from "@/components/MonthCalendar";
 import { StudentFilterFields } from "@/components/StudentFilterFields";
-import { pad, todayIso } from "@/lib/date-utils";
+import { pad, todayIso, formatTime } from "@/lib/date-utils";
 import { isNonWorkingDay, eventTypeLabel } from "@/lib/attendance-status";
-import { applyStudentFilters, distinctValues, filterQueryString } from "@/lib/student-filters";
+import {
+  applyStudentFilters,
+  distinctValues,
+  filterQueryString,
+  parseCombinedFilter,
+} from "@/lib/student-filters";
+
+const PAGE_SIZE = 20;
+// CSV export isn't paginated -- it grabs up to this many of the most recent
+// filtered rows regardless of which page the table is showing.
+const EXPORT_LIMIT = 200;
 
 export default async function AttendancePage({
   searchParams,
@@ -17,12 +27,14 @@ export default async function AttendancePage({
     employee_id?: string;
     cal?: string;
     error?: string;
-    department?: string;
-    standard?: string;
-    section?: string;
+    filter?: string;
+    page?: string;
   };
 }) {
   const supabase = createClient();
+  const page = Math.max(1, Number(searchParams.page) || 1);
+  const from = (page - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
 
   // Calendar month defaults to the active date filter's month, else the
   // current month; navigated independently via ?cal= so browsing months
@@ -53,11 +65,7 @@ export default async function AttendancePage({
     year: "numeric",
   });
 
-  const filters = {
-    department: searchParams.department,
-    standard: searchParams.standard,
-    section: searchParams.section,
-  };
+  const filters = parseCombinedFilter(searchParams.filter);
   const filterQuery = filterQueryString(filters);
   const hasStudentFilters = Boolean(filters.department || filters.standard || filters.section);
 
@@ -74,14 +82,20 @@ export default async function AttendancePage({
   const sections = distinctValues(allActive, "section");
   const filteredEmployeeIds = hasStudentFilters ? (filterMatches ?? []).map((e) => e.id) : null;
 
-  let logsQuery = supabase
-    .from("attendance_logs")
-    .select("id, employee_id, event_type, event_date, scanned_at, confidence")
-    .order("scanned_at", { ascending: false })
-    .limit(200);
-  if (searchParams.date) logsQuery = logsQuery.eq("event_date", searchParams.date);
-  if (searchParams.employee_id) logsQuery = logsQuery.eq("employee_id", searchParams.employee_id);
-  if (filteredEmployeeIds) logsQuery = logsQuery.in("employee_id", filteredEmployeeIds);
+  function buildLogsQuery() {
+    let q = supabase
+      .from("attendance_logs")
+      .select("id, employee_id, event_type, event_date, scanned_at, confidence", {
+        count: "exact",
+      })
+      .order("scanned_at", { ascending: false });
+    if (searchParams.date) q = q.eq("event_date", searchParams.date);
+    if (searchParams.employee_id) q = q.eq("employee_id", searchParams.employee_id);
+    if (filteredEmployeeIds) q = q.in("employee_id", filteredEmployeeIds);
+    return q;
+  }
+  const logsQuery = buildLogsQuery().range(from, to);
+  const exportLogsQuery = buildLogsQuery().limit(EXPORT_LIMIT);
 
   let calLogsQuery = supabase
     .from("attendance_logs")
@@ -91,11 +105,18 @@ export default async function AttendancePage({
     .lte("event_date", calMonthEnd);
   if (filteredEmployeeIds) calLogsQuery = calLogsQuery.in("employee_id", filteredEmployeeIds);
 
-  // Independent queries -- run concurrently rather than paying three
+  // Independent queries -- run concurrently rather than paying four
   // sequential Supabase round-trips back to back.
-  const [{ data: employees }, { data: logs }, { data: calLogs }, { data: holidayRows }] = await Promise.all([
+  const [
+    { data: employees },
+    { data: logs, count: logsCount },
+    { data: exportLogs },
+    { data: calLogs },
+    { data: holidayRows },
+  ] = await Promise.all([
     supabase.from("employees").select("id, full_name").order("full_name"),
     logsQuery,
+    exportLogsQuery,
     calLogsQuery,
     supabase
       .from("holidays")
@@ -111,6 +132,19 @@ export default async function AttendancePage({
     ...log,
     employee_name: nameById.get(log.employee_id) ?? "Unknown",
   }));
+  const exportRows = (exportLogs ?? []).map((log) => ({
+    ...log,
+    employee_name: nameById.get(log.employee_id) ?? "Unknown",
+  }));
+  const totalPages = Math.max(1, Math.ceil((logsCount ?? 0) / PAGE_SIZE));
+  const pageHref = (targetPage: number) => {
+    const params = new URLSearchParams(filterQuery);
+    if (searchParams.date) params.set("date", searchParams.date);
+    if (searchParams.employee_id) params.set("employee_id", searchParams.employee_id);
+    if (searchParams.cal) params.set("cal", searchParams.cal);
+    params.set("page", String(targetPage));
+    return `/attendance?${params.toString()}`;
+  };
 
   const presentByDay = new Map<number, Set<string>>();
   for (const log of calLogs ?? []) {
@@ -181,7 +215,7 @@ export default async function AttendancePage({
           >
             Monthly register →
           </Link>
-          <ExportCsvButton rows={rows} />
+          <ExportCsvButton rows={exportRows} />
         </div>
       </div>
 
@@ -246,9 +280,7 @@ export default async function AttendancePage({
               departments={departments}
               standards={standards}
               sections={sections}
-              department={searchParams.department}
-              standard={searchParams.standard}
-              section={searchParams.section}
+              filters={filters}
             />
             <button
               type="submit"
@@ -277,7 +309,7 @@ export default async function AttendancePage({
                     <td className="px-4 py-3 text-slate-600">{eventTypeLabel(row.event_type)}</td>
                     <td className="px-4 py-3 text-slate-600">{row.event_date}</td>
                     <td className="px-4 py-3 text-slate-600">
-                      {new Date(row.scanned_at).toLocaleTimeString()}
+                      {formatTime(row.scanned_at)}
                     </td>
                     <td className="px-4 py-3 text-slate-600">
                       {row.confidence != null ? row.confidence.toFixed(2) : "-"}
@@ -297,6 +329,32 @@ export default async function AttendancePage({
               </tbody>
             </table>
           </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between text-sm text-slate-600">
+              <Link
+                href={pageHref(page - 1)}
+                aria-disabled={page <= 1}
+                className={`rounded-md border border-slate-300 px-3 py-1.5 ${
+                  page <= 1 ? "pointer-events-none opacity-40" : "hover:bg-slate-50"
+                }`}
+              >
+                ← Previous
+              </Link>
+              <span>
+                Page {page} of {totalPages}
+              </span>
+              <Link
+                href={pageHref(page + 1)}
+                aria-disabled={page >= totalPages}
+                className={`rounded-md border border-slate-300 px-3 py-1.5 ${
+                  page >= totalPages ? "pointer-events-none opacity-40" : "hover:bg-slate-50"
+                }`}
+              >
+                Next →
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </div>

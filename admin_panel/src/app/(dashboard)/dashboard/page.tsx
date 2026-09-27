@@ -182,7 +182,7 @@ function StatCard({
         {icon}
       </span>
       <div className="relative">
-        <p className="text-sm text-white/80">{label}</p>
+        <p className="text-sm font-semibold text-white/80">{label}</p>
         <p className="mt-1 text-2xl font-semibold">{value}</p>
       </div>
     </div>
