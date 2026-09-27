@@ -1,3 +1,7 @@
+# Local reference values for --dart-define flags -- never read by the app,
+# but keep it out of version control anyway (see config.dart).
+.env
+
 # Miscellaneous
 *.class
 *.log

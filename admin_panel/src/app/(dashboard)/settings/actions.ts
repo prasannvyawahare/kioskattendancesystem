@@ -16,6 +16,13 @@ export async function updateSettings(formData: FormData) {
   const voice_enabled = formData.get("voice_enabled") === "on";
   const enrollment_enabled = formData.get("enrollment_enabled") === "on";
 
+  // Falls back to "disabled" for anything unrecognized rather than trusting
+  // an unvalidated form value straight into a column with a check
+  // constraint (supabase/migrations/0023_notification_channel.sql).
+  const channelValue = String(formData.get("parent_notification_channel") ?? "");
+  const parent_notification_channel =
+    channelValue === "whatsapp" || channelValue === "sms" ? channelValue : "disabled";
+
   // Kiosk timing knobs -- positive-integer inputs, falling back to the
   // column's own default (via the check constraint) rather than trusting
   // unvalidated form input if something odd comes through.
@@ -37,6 +44,7 @@ export async function updateSettings(formData: FormData) {
       checkout_greeting_template,
       voice_enabled,
       enrollment_enabled,
+      parent_notification_channel,
       online_timeout_seconds,
       min_scan_gap_minutes,
       sync_interval_hours,

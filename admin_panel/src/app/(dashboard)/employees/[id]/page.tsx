@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { toggleActive, resetEmbeddings } from "../actions";
 import { DeleteEmployeeButton } from "./DeleteEmployeeButton";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { eventTypeLabel } from "@/lib/attendance-status";
 
 export default async function EmployeeDetailPage({
   params,
@@ -172,7 +173,7 @@ export default async function EmployeeDetailPage({
         <ul className="mt-3 divide-y divide-slate-100 text-sm">
           {attendance?.map((row, i) => (
             <li key={i} className="flex items-center justify-between py-2">
-              <span className="capitalize text-slate-700">{row.event_type.replace("_", " ")}</span>
+              <span className="text-slate-700">{eventTypeLabel(row.event_type)}</span>
               <span className="text-slate-500">{new Date(row.scanned_at).toLocaleString()}</span>
             </li>
           ))}

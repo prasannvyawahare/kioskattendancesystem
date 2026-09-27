@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { GenerateReportPdfButton } from "./generate-report-pdf-button";
+import { StudentFilterFields } from "@/components/StudentFilterFields";
 import { pad } from "@/lib/date-utils";
+import { isNonWorkingDay } from "@/lib/attendance-status";
+import { applyStudentFilters, distinctValues, filterQueryString } from "@/lib/student-filters";
 
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: { month?: string };
+  searchParams: { month?: string; department?: string; standard?: string; section?: string };
 }) {
   const supabase = createClient();
   const now = new Date();
@@ -37,14 +40,27 @@ export default async function ReportsPage({
     year: "numeric",
   });
 
-  // Independent queries -- run concurrently rather than paying two
-  // sequential Supabase round-trips back to back.
-  const [{ data: students }, { data: logs }] = await Promise.all([
+  const filters = {
+    department: searchParams.department,
+    standard: searchParams.standard,
+    section: searchParams.section,
+  };
+  const filterQuery = filterQueryString(filters);
+
+  const studentsQuery = applyStudentFilters(
     supabase
       .from("employees")
-      .select("id, full_name, employee_code, department")
+      .select("id, full_name, employee_code, department, standard, section")
       .eq("is_active", true)
       .order("full_name"),
+    filters,
+  );
+
+  // Independent queries -- run concurrently rather than paying three
+  // sequential Supabase round-trips back to back.
+  const [{ data: allActive }, { data: students }, { data: logs }, { data: holidayRows }] = await Promise.all([
+    supabase.from("employees").select("department, standard, section").eq("is_active", true),
+    studentsQuery,
     // Counts either event type as presence for the day: a kiosk running in
     // check_out_only mode (see supabase/migrations/0013_offline_sync.sql)
     // never writes a check_in row, so requiring check_in alone would mark
@@ -55,7 +71,15 @@ export default async function ReportsPage({
       .in("event_type", ["check_in", "check_out"])
       .gte("event_date", monthStart)
       .lte("event_date", monthEnd),
+    supabase
+      .from("holidays")
+      .select("holiday_date")
+      .gte("holiday_date", monthStart)
+      .lte("holiday_date", monthEnd),
   ]);
+  const departments = distinctValues(allActive, "department");
+  const standards = distinctValues(allActive, "standard");
+  const sections = distinctValues(allActive, "section");
 
   const presenceByStudent = new Map<string, Set<number>>();
   for (const log of logs ?? []) {
@@ -64,7 +88,12 @@ export default async function ReportsPage({
     presenceByStudent.get(log.employee_id)!.add(day);
   }
 
+  const holidaySet = new Set((holidayRows ?? []).map((h) => h.holiday_date));
   const dayNumbers = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  // Sundays and admin-added holidays don't count toward the working-day
+  // denominator -- see supabase/migrations/0024_holidays.sql.
+  const workingDayNumbers = dayNumbers.filter((d) => !isNonWorkingDay(year, month, d, holidaySet));
+  const workingElapsedDays = workingDayNumbers.filter((d) => d <= elapsedDays).length;
 
   const groupsByDepartment = new Map<
     string,
@@ -73,8 +102,8 @@ export default async function ReportsPage({
   for (const student of students ?? []) {
     const dept = student.department?.trim() || "Unassigned";
     const presentDays = presenceByStudent.get(student.id) ?? new Set<number>();
-    const presentCount = dayNumbers.filter((d) => d <= elapsedDays && presentDays.has(d)).length;
-    const pct = elapsedDays > 0 ? Math.round((presentCount / elapsedDays) * 100) : null;
+    const presentCount = workingDayNumbers.filter((d) => d <= elapsedDays && presentDays.has(d)).length;
+    const pct = workingElapsedDays > 0 ? Math.round((presentCount / workingElapsedDays) * 100) : null;
     const row = { full_name: student.full_name, employee_code: student.employee_code, presentCount, pct };
     if (!groupsByDepartment.has(dept)) groupsByDepartment.set(dept, []);
     groupsByDepartment.get(dept)!.push(row);
@@ -114,6 +143,14 @@ export default async function ReportsPage({
             className="rounded-md border border-slate-300 px-2 py-1.5"
           />
         </div>
+        <StudentFilterFields
+          departments={departments}
+          standards={standards}
+          sections={sections}
+          department={searchParams.department}
+          standard={searchParams.standard}
+          section={searchParams.section}
+        />
         <button
           type="submit"
           className="rounded-md bg-indigo-600 px-3 py-1.5 font-medium text-white hover:bg-indigo-500"
@@ -122,13 +159,13 @@ export default async function ReportsPage({
         </button>
         <div className="ml-auto flex items-center gap-2 text-xs text-slate-500">
           <Link
-            href={`/reports?month=${prevMonthValue}`}
+            href={`/reports?month=${prevMonthValue}${filterQuery ? `&${filterQuery}` : ""}`}
             className="rounded px-2 py-1 hover:bg-slate-100 hover:text-slate-900"
           >
             ← Previous month
           </Link>
           <Link
-            href={`/reports?month=${nextMonthValue}`}
+            href={`/reports?month=${nextMonthValue}${filterQuery ? `&${filterQuery}` : ""}`}
             className="rounded px-2 py-1 hover:bg-slate-100 hover:text-slate-900"
           >
             Next month →

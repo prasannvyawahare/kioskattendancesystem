@@ -67,6 +67,17 @@ const NAV_ITEMS: { href: string; label: string; icon: ReactNode }[] = [
     ),
   },
   {
+    href: "/holidays",
+    label: "Holidays",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.5} className="h-5 w-5">
+        <rect x="4.5" y="5.5" width="15" height="14" rx="2" stroke="currentColor" />
+        <path d="M4.5 10.5h15M8.5 3.5v3.5M15.5 3.5v3.5" stroke="currentColor" strokeLinecap="round" />
+        <path d="M9 15l1.6 1.6L15 12.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
     href: "/settings",
     label: "Settings",
     icon: (
@@ -86,9 +97,9 @@ const NAV_ITEMS: { href: string; label: string; icon: ReactNode }[] = [
 const VARIANT_CLASSES = {
   sidebar: {
     active:
-      "flex items-center gap-3 rounded-xl bg-white px-3 py-2.5 text-sm font-semibold text-violet-700 shadow-sm",
+      "flex items-center gap-3 rounded-2xl bg-white px-3 py-2.5 text-sm font-semibold text-violet-700 shadow-md shadow-black/10",
     inactive:
-      "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white",
+      "flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium text-white/65 transition-colors hover:bg-white/10 hover:text-white",
   },
   mobile: {
     active:

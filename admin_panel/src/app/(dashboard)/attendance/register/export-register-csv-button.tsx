@@ -10,18 +10,21 @@ export function ExportRegisterCsvButton({
   monthLabel,
   days,
   rows,
+  nonWorkingDays = [],
 }: {
   monthLabel: string;
   days: number[];
   rows: Row[];
+  nonWorkingDays?: number[];
 }) {
   function handleExport() {
+    const nonWorkingSet = new Set(nonWorkingDays);
     const header = ["Student", ...days.map(String), "%"];
     const csvRows = rows.map((row) => {
       const presentSet = new Set(row.presentDays);
       return [
         row.full_name,
-        ...days.map((d) => (presentSet.has(d) ? "P" : "A")),
+        ...days.map((d) => (nonWorkingSet.has(d) ? "NA" : presentSet.has(d) ? "P" : "A")),
         row.pct == null ? "" : `${row.pct}%`,
       ];
     });

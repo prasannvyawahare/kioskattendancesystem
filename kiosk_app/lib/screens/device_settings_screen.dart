@@ -2,19 +2,20 @@ import 'package:flutter/material.dart';
 
 import '../models/attendance_mode.dart';
 import '../services/attendance_mode_service.dart';
+import '../services/kiosk_lock_task_service.dart';
 import '../services/sync_service.dart';
 import 'error_log_screen.dart';
 
 const _modeLabels = {
-  AttendanceMode.both: 'Both (check-in then check-out)',
-  AttendanceMode.checkInOnly: 'Check-in only',
-  AttendanceMode.checkOutOnly: 'Check-out only',
+  AttendanceMode.both: 'Both (Time In then Time Out)',
+  AttendanceMode.checkInOnly: 'Time In only',
+  AttendanceMode.checkOutOnly: 'Time Out only',
 };
 
 const _modeDescriptions = {
-  AttendanceMode.both: 'First scan of the day checks in, the next checks out.',
-  AttendanceMode.checkInOnly: 'Every scan only ever records a check-in.',
-  AttendanceMode.checkOutOnly: 'Every scan only ever records a check-out.',
+  AttendanceMode.both: 'First scan of the day times in, the next times out.',
+  AttendanceMode.checkInOnly: 'Every scan only ever records a Time In.',
+  AttendanceMode.checkOutOnly: 'Every scan only ever records a Time Out.',
 };
 
 /// Reached from MemberListScreen's app bar (same PIN-gated flow as
@@ -42,6 +43,40 @@ class DeviceSettingsScreen extends StatelessWidget {
       SyncOutcome.failed => 'Sync failed -- will retry automatically. (${result.error})',
     };
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _unpin(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unpin kiosk?'),
+        content: const Text(
+          'This releases lock task mode and exits to the home screen, so '
+          'anyone with the device can reach other apps or system settings. '
+          'Reopening this app re-locks it automatically.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Unpin'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await KioskLockTaskService.unpinAndExitToHome();
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not unpin: $e')),
+      );
+    }
   }
 
   @override
@@ -131,6 +166,53 @@ class DeviceSettingsScreen extends StatelessWidget {
             ),
             icon: const Icon(Icons.bug_report_outlined),
             label: const Text('View error log'),
+          ),
+          const Divider(height: 40),
+          const Text('Exit kiosk mode', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 4),
+          Text(
+            'The kiosk auto-pins itself every time it opens. Use this to step out to '
+            'the home screen -- for example to reach Android settings -- without '
+            'disabling that.',
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 12),
+          FutureBuilder<bool>(
+            future: KioskLockTaskService.isDeviceOwner(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const SizedBox.shrink();
+              final isDeviceOwner = snapshot.data!;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      isDeviceOwner ? Icons.verified_user_outlined : Icons.warning_amber_outlined,
+                      size: 18,
+                      color: isDeviceOwner ? Colors.tealAccent : Colors.amber,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        isDeviceOwner
+                            ? 'Fully locked (Device Owner): no system "unpin" banner or '
+                                  'Back/Overview gesture -- only this button exits.'
+                            : 'Not yet set up as Device Owner: Android will still show its '
+                                  'own "app is pinned" banner and let Back+Overview unpin it. '
+                                  'See ANDROID_KIOSK_SETUP.md step 5 to close that off.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          OutlinedButton.icon(
+            onPressed: () => _unpin(context),
+            icon: const Icon(Icons.lock_open_outlined),
+            label: const Text('Unpin kiosk'),
           ),
         ],
       ),

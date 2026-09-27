@@ -85,12 +85,32 @@ package com.yourorg.kiosk_app
 
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
+import android.content.Intent
 import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    // Kept in sync with KioskLockTaskService._channel on the Dart side.
+    private val lockTaskChannel = "kiosk/lock_task"
+
     override fun onResume() {
         super.onResume()
         startKioskLockIfPossible()
+    }
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, lockTaskChannel)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "unpinAndExitToHome" -> {
+                        unpinAndExitToHome()
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
     }
 
     private fun startKioskLockIfPossible() {
@@ -108,17 +128,41 @@ class MainActivity : FlutterActivity() {
             // Already locked, or lock task isn't permitted yet -- safe to ignore.
         }
     }
+
+    // The deliberate escape hatch: releases lock task and hands off to the
+    // launcher so the operator can reach Settings or any other app. Re-
+    // opening this app triggers onResume -> startKioskLockIfPossible() again,
+    // so it re-pins itself automatically -- there's no separate "pin" call.
+    // Wired to the "Unpin kiosk" button on DeviceSettingsScreen (PIN-gated,
+    // same as enrollment) via KioskLockTaskService.unpinAndExitToHome().
+    private fun unpinAndExitToHome() {
+        try {
+            stopLockTask()
+        } catch (e: IllegalStateException) {
+            // Not currently locked -- fine to ignore.
+        }
+
+        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_HOME)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        startActivity(homeIntent)
+    }
 }
 ```
 
 
 ## 5. Provision the tablet as Device Owner
 
-**This step is what makes lock task mode actually unbreakable** — without
-it, `startLockTask()` still works but shows Android's "screen pinning"
-system dialog and the user can back out via a long-press-back/overview
-gesture. With Device Owner status, there is no dialog and no way to leave
-the app short of a factory reset.
+**This step is what suppresses Android's own "screen pinning" warning** —
+without it, `startLockTask()` still works but shows the system "app is
+pinned" dialog/banner and the user can back out via a long-press-back/
+overview gesture. With Device Owner status, there is no dialog, and the
+*only* way out is the in-app "Unpin kiosk" button on `DeviceSettingsScreen`
+(PIN-gated, reached the same way as enrollment) — there is no system
+gesture that works instead. That button calls `stopLockTask()` and hands
+off to the launcher; reopening the kiosk app re-locks it automatically via
+`onResume`.
 
 Requirements (Device Owner can only be set on a device with **no accounts**
 added — Google, email, etc.):

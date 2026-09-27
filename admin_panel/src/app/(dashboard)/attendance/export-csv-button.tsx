@@ -1,5 +1,7 @@
 "use client";
 
+import { eventTypeLabel } from "@/lib/attendance-status";
+
 type Row = {
   employee_name: string;
   event_type: string;
@@ -13,7 +15,7 @@ export function ExportCsvButton({ rows }: { rows: Row[] }) {
     const header = ["Student", "Event", "Date", "Time", "Confidence"];
     const csvRows = rows.map((row) => [
       row.employee_name,
-      row.event_type,
+      eventTypeLabel(row.event_type),
       row.event_date,
       new Date(row.scanned_at).toLocaleTimeString(),
       row.confidence != null ? row.confidence.toFixed(2) : "",

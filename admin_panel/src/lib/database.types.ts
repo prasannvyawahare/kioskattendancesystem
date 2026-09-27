@@ -8,6 +8,8 @@
 export type EmbeddingStatus = "pending" | "processing" | "completed" | "failed";
 export type AttendanceEventType = "check_in" | "check_out";
 export type ProfileRole = "admin" | "kiosk";
+// See supabase/migrations/0025_student_gender.sql.
+export type Gender = "male" | "female" | "other";
 
 export interface Database {
   public: {
@@ -41,6 +43,8 @@ export interface Database {
           // Class/grade and section -- see supabase/migrations/0019_standard_section.sql.
           standard: string | null;
           section: string | null;
+          // See supabase/migrations/0025_student_gender.sql.
+          gender: Gender | null;
           is_active: boolean;
           embedding_status: EmbeddingStatus;
           // Parent/guardian contacts -- see supabase/migrations/0016_parent_contacts.sql.
@@ -64,6 +68,7 @@ export interface Database {
           employee_code?: string | null;
           standard?: string | null;
           section?: string | null;
+          gender?: Gender | null;
           is_active?: boolean;
           embedding_status?: EmbeddingStatus;
           mother_name?: string | null;
@@ -82,6 +87,7 @@ export interface Database {
           employee_code: string | null;
           standard: string | null;
           section: string | null;
+          gender: Gender | null;
           is_active: boolean;
           embedding_status: EmbeddingStatus;
           mother_name: string | null;
@@ -144,6 +150,29 @@ export interface Database {
         };
         Relationships: [];
       };
+      // Delivery log for supabase/functions/send-attendance-whatsapp --
+      // one row per (attendance_logs row, parent contact) send attempt.
+      // Written only by the Edge Function via the service-role key. See
+      // supabase/migrations/0021_whatsapp_notifications.sql.
+      attendance_notification_log: {
+        Row: {
+          id: string;
+          attendance_log_id: string;
+          recipient: "mother" | "father";
+          channel: "whatsapp" | "sms";
+          phone: string;
+          status: "sent" | "failed" | "skipped";
+          error_message: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: never; // written only by the Edge Function
+        };
+        Update: {
+          id?: never;
+        };
+        Relationships: [];
+      };
       // Singleton row (id is always `true`) -- admin-managed kiosk config:
       // org name, greeting templates, voice/enrollment toggles, PIN hash.
       // See supabase/migrations/0007_kiosk_enrollment.sql.
@@ -154,6 +183,9 @@ export interface Database {
           member_label: string;
           voice_enabled: boolean;
           enrollment_enabled: boolean;
+          // Channel for supabase/functions/send-attendance-whatsapp -- see
+          // supabase/migrations/0023_notification_channel.sql.
+          parent_notification_channel: "disabled" | "whatsapp" | "sms";
           checkin_greeting_template: string;
           checkout_greeting_template: string;
           enrollment_pin_hash: string | null;
@@ -177,6 +209,7 @@ export interface Database {
           member_label: string;
           voice_enabled: boolean;
           enrollment_enabled: boolean;
+          parent_notification_channel: "disabled" | "whatsapp" | "sms";
           checkin_greeting_template: string;
           checkout_greeting_template: string;
           online_timeout_seconds: number;
@@ -189,6 +222,28 @@ export interface Database {
         // enrollment_pin_hash is intentionally not updatable here -- it's
         // only ever written via the set_enrollment_pin() RPC below, so the
         // plaintext PIN never has to be stored client-side.
+        Relationships: [];
+      };
+      // Admin-added non-working dates (on top of every Sunday, which needs
+      // no row) -- see supabase/migrations/0024_holidays.sql.
+      holidays: {
+        Row: {
+          id: string;
+          holiday_date: string;
+          name: string;
+          created_at: string;
+          created_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          holiday_date: string;
+          name?: string;
+          created_by?: string | null;
+        };
+        Update: Partial<{
+          holiday_date: string;
+          name: string;
+        }>;
         Relationships: [];
       };
     };
@@ -265,3 +320,4 @@ export type Employee = Database["public"]["Tables"]["employees"]["Row"];
 export type EmployeePhoto = Database["public"]["Tables"]["employee_photos"]["Row"];
 export type AttendanceLog = Database["public"]["Tables"]["attendance_logs"]["Row"];
 export type KioskSettings = Database["public"]["Tables"]["kiosk_settings"]["Row"];
+export type Holiday = Database["public"]["Tables"]["holidays"]["Row"];
