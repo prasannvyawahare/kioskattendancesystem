@@ -83,8 +83,30 @@ const NAV_ITEMS: { href: string; label: string; icon: ReactNode }[] = [
   },
 ];
 
-export function SideNav({ className = "flex flex-col gap-1" }: { className?: string }) {
+const VARIANT_CLASSES = {
+  sidebar: {
+    active:
+      "flex items-center gap-3 rounded-xl bg-white px-3 py-2.5 text-sm font-semibold text-violet-700 shadow-sm",
+    inactive:
+      "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white",
+  },
+  mobile: {
+    active:
+      "flex items-center gap-3 rounded-lg bg-violet-50 px-3 py-2 text-sm font-medium text-violet-700",
+    inactive:
+      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+  },
+} as const;
+
+export function SideNav({
+  className = "flex flex-col gap-1",
+  variant = "mobile",
+}: {
+  className?: string;
+  variant?: keyof typeof VARIANT_CLASSES;
+}) {
   const pathname = usePathname();
+  const classes = VARIANT_CLASSES[variant];
 
   return (
     <nav className={className}>
@@ -95,15 +117,7 @@ export function SideNav({ className = "flex flex-col gap-1" }: { className?: str
           // /attendance itself shouldn't stay highlighted while on /attendance/register
           (item.href === "/attendance" && pathname === "/attendance");
         return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={
-              active
-                ? "flex items-center gap-3 rounded-lg bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-700"
-                : "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-            }
-          >
+          <Link key={item.href} href={item.href} className={active ? classes.active : classes.inactive}>
             {item.icon}
             {item.label}
           </Link>

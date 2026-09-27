@@ -86,16 +86,27 @@ export function LiveAttendanceFeed({
   }, [today]);
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white">
-      <div className="border-b border-slate-200 px-4 py-3">
-        <h2 className="text-sm font-medium text-slate-900">Live attendance feed</h2>
-      </div>
+    <section className="rounded-2xl bg-white p-5 shadow-sm shadow-slate-200/60">
+      <h2 className="mb-4 text-sm font-semibold text-slate-900">Live attendance feed</h2>
       <ul className="divide-y divide-slate-100 text-sm">
         {logs.map((log) => (
-          <li key={log.id} className="flex items-center justify-between px-4 py-3">
-            <span className="font-medium text-slate-900">{log.employee_name}</span>
-            <span className="capitalize text-slate-600">{log.event_type.replace("_", " ")}</span>
-            <span className="text-slate-500">{new Date(log.scanned_at).toLocaleTimeString()}</span>
+          <li key={log.id} className="flex items-center gap-3 py-3">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-50 text-xs font-semibold text-violet-700">
+              {initials(log.employee_name)}
+            </span>
+            <span className="flex-1 truncate font-medium text-slate-900">{log.employee_name}</span>
+            <span
+              className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium capitalize ${
+                log.event_type === "check_in"
+                  ? "bg-emerald-50 text-emerald-600"
+                  : "bg-amber-50 text-amber-600"
+              }`}
+            >
+              {log.event_type.replace("_", " ")}
+            </span>
+            <span className="w-16 shrink-0 text-right text-slate-500">
+              {new Date(log.scanned_at).toLocaleTimeString()}
+            </span>
           </li>
         ))}
         {logs.length === 0 && (
@@ -104,4 +115,9 @@ export function LiveAttendanceFeed({
       </ul>
     </section>
   );
+}
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
 }

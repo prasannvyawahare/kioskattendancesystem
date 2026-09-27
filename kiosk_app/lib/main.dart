@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:cronet_http/cronet_http.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart';
+import 'package:http/io_client.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config.dart';
@@ -56,6 +60,7 @@ Future<void> main() async {
     await Supabase.initialize(
       url: KioskConfig.supabaseUrl,
       publishableKey: KioskConfig.supabaseAnonKey,
+      httpClient: _buildHttpClient(),
     );
 
     // The only place a concrete backend is chosen -- everything else in the
@@ -80,6 +85,23 @@ Future<void> main() async {
   }, (error, stack) {
     ErrorLogger.log(error, stackTrace: stack, context: 'runZonedGuarded');
   });
+}
+
+// dart:io's HttpClient (used by supabase_flutter by default) validates TLS
+// against a root certificate bundle baked into the Flutter engine at build
+// time, which can lag behind CAs Android's own OS trust store already
+// trusts (e.g. newer Google Trust Services intermediates). Routing through
+// Cronet delegates TLS entirely to the OS-managed trust store instead,
+// which is what actually connects on-device.
+Client _buildHttpClient() {
+  if (!Platform.isAndroid) {
+    return IOClient();
+  }
+  final engine = CronetEngine.build(
+    cacheMode: CacheMode.memory,
+    cacheMaxSize: 2 * 1024 * 1024,
+  );
+  return CronetClient.fromCronetEngine(engine, closeEngine: true);
 }
 
 Future<void> _pruneOldAttendanceState() async {

@@ -52,36 +52,48 @@ export default async function DashboardPage() {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <AutoRefresh />
       <div>
-        <h1 className="text-lg font-semibold text-slate-900">Dashboard</h1>
+        <h1 className="text-xl font-semibold text-slate-900">Dashboard</h1>
         <p className="text-sm text-slate-500">Today, {new Date().toLocaleDateString()}</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Active students" value={roster.length} accent="indigo" />
-        <StatCard label="Check-ins today" value={checkIns} accent="emerald" />
-        <StatCard label="Check-outs today" value={checkOuts} accent="amber" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Active students" value={roster.length} accent="violet" icon={<UsersIcon />} />
+        <StatCard label="Check-ins today" value={checkIns} accent="emerald" icon={<CheckInIcon />} />
+        <StatCard label="Check-outs today" value={checkOuts} accent="amber" icon={<CheckOutIcon />} />
+        <StatCard
+          label="Absent today"
+          value={absentStudents.length}
+          accent="rose"
+          icon={<AbsentIcon />}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="rounded-xl border border-slate-200 bg-white">
-          <div className="border-b border-slate-200 px-4 py-3">
-            <h2 className="text-sm font-medium text-slate-900">
-              Absent today ({absentStudents.length})
-            </h2>
+        <section className="rounded-2xl bg-white p-5 shadow-sm shadow-slate-200/60">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-900">Absent today</h2>
+            <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-600">
+              {absentStudents.length}
+            </span>
           </div>
           <ul className="max-h-80 divide-y divide-slate-100 overflow-y-auto text-sm">
             {absentStudents.map((student) => (
-              <li key={student.id} className="flex items-center justify-between px-4 py-2.5">
+              <li key={student.id} className="flex items-center gap-3 py-2.5">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-50 text-xs font-semibold text-violet-700">
+                  {initials(student.full_name)}
+                </span>
                 <Link
                   href={`/employees/${student.id}`}
-                  className="font-medium text-slate-900 hover:underline"
+                  className="flex-1 truncate font-medium text-slate-900 hover:underline"
                 >
                   {student.full_name}
                 </Link>
-                <span className="text-slate-500">{student.department ?? "-"}</span>
+                <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-500">
+                  {student.department ?? "-"}
+                </span>
               </li>
             ))}
             {absentStudents.length === 0 && (
@@ -92,39 +104,35 @@ export default async function DashboardPage() {
           </ul>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white">
-          <div className="border-b border-slate-200 px-4 py-3">
-            <h2 className="text-sm font-medium text-slate-900">By department</h2>
+        <section className="rounded-2xl bg-white p-5 shadow-sm shadow-slate-200/60">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-900">By department</h2>
+            <span className="text-xs text-slate-400">% present today</span>
           </div>
-          <table className="w-full text-sm">
-            <thead className="text-left text-slate-500">
-              <tr>
-                <th className="px-4 py-2 font-medium">Department</th>
-                <th className="px-4 py-2 font-medium">Active</th>
-                <th className="px-4 py-2 font-medium">Present</th>
-                <th className="px-4 py-2 font-medium">%</th>
-              </tr>
-            </thead>
-            <tbody>
-              {departmentRows.map(([dept, stats]) => (
-                <tr key={dept} className="border-t border-slate-100">
-                  <td className="px-4 py-2 text-slate-900">{dept}</td>
-                  <td className="px-4 py-2 text-slate-600">{stats.active}</td>
-                  <td className="px-4 py-2 text-slate-600">{stats.present}</td>
-                  <td className="px-4 py-2 text-slate-600">
-                    {stats.active > 0 ? Math.round((stats.present / stats.active) * 100) : 0}%
-                  </td>
-                </tr>
-              ))}
-              {departmentRows.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
-                    No active students yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          <ul className="space-y-4">
+            {departmentRows.map(([dept, stats]) => {
+              const pct = stats.active > 0 ? Math.round((stats.present / stats.active) * 100) : 0;
+              return (
+                <li key={dept}>
+                  <div className="mb-1.5 flex items-center justify-between text-sm">
+                    <span className="font-medium text-slate-900">{dept}</span>
+                    <span className="text-slate-500">
+                      {stats.present}/{stats.active} · {pct}%
+                    </span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="h-full rounded-full bg-violet-500"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </li>
+              );
+            })}
+            {departmentRows.length === 0 && (
+              <li className="py-8 text-center text-slate-400">No active students yet.</li>
+            )}
+          </ul>
         </section>
       </div>
 
@@ -133,27 +141,79 @@ export default async function DashboardPage() {
   );
 }
 
-const ACCENT_BORDERS = {
-  indigo: "border-l-indigo-500",
-  emerald: "border-l-emerald-500",
-  amber: "border-l-amber-500",
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
+}
+
+const ACCENT_CLASSES = {
+  violet: "bg-violet-600",
+  emerald: "bg-emerald-500",
+  amber: "bg-amber-500",
+  rose: "bg-rose-500",
 } as const;
 
 function StatCard({
   label,
   value,
   accent,
+  icon,
 }: {
   label: string;
   value: number;
-  accent: keyof typeof ACCENT_BORDERS;
+  accent: keyof typeof ACCENT_CLASSES;
+  icon: React.ReactNode;
 }) {
   return (
-    <div
-      className={`rounded-xl border border-l-4 border-slate-200 bg-white p-5 ${ACCENT_BORDERS[accent]}`}
-    >
-      <p className="text-sm text-slate-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
+    <div className="flex items-center gap-4 rounded-2xl bg-white p-5 shadow-sm shadow-slate-200/60">
+      <span
+        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white ${ACCENT_CLASSES[accent]}`}
+      >
+        {icon}
+      </span>
+      <div>
+        <p className="text-sm text-slate-500">{label}</p>
+        <p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p>
+      </div>
     </div>
+  );
+}
+
+function UsersIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} className="h-6 w-6">
+      <circle cx="9" cy="8.5" r="3" stroke="currentColor" />
+      <path d="M3 19c1-3.2 3.2-5 6-5s5 1.8 6 5" stroke="currentColor" strokeLinecap="round" />
+      <path d="M15.5 6.5a2.5 2.5 0 010 5" stroke="currentColor" strokeLinecap="round" />
+      <path d="M17 14.2c2 .4 3.3 1.9 4 4.8" stroke="currentColor" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CheckInIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} className="h-6 w-6">
+      <path d="M15 3.5h3.5A1.5 1.5 0 0120 5v14a1.5 1.5 0 01-1.5 1.5H15" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M11 8l4 4-4 4M4 12h11" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CheckOutIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} className="h-6 w-6">
+      <path d="M9 3.5H5.5A1.5 1.5 0 004 5v14a1.5 1.5 0 001.5 1.5H9" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M13 8l4 4-4 4M20 12H9" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function AbsentIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} className="h-6 w-6">
+      <circle cx="10" cy="8.5" r="3" stroke="currentColor" />
+      <path d="M3.5 19c1-3.2 3.2-5 6.5-5s5.5 1.8 6.5 5" stroke="currentColor" strokeLinecap="round" />
+      <path d="M17 8.5l3.5 3.5M20.5 8.5L17 12" stroke="currentColor" strokeLinecap="round" />
+    </svg>
   );
 }
