@@ -92,6 +92,13 @@ to grant those two accounts their `profiles.role`. Enable the `vector` extension
 5. **Greet** — on check-in/check-out, `GreetingService` renders the admin-configured template
    (`kiosk_settings.checkin_greeting_template` / `checkout_greeting_template`, placeholders `{name}`,
    `{time_greeting}`, `{institution}`) and speaks it via `flutter_tts`.
+6. **Notify parents** — an `attendance_logs` INSERT fires a `pg_net`-backed Postgres trigger
+   (`migrations/0022_attendance_whatsapp_webhook_trigger.sql`) into the `send-attendance-whatsapp`
+   Edge Function, which messages `employees.mother_phone`/`father_phone` via Twilio over whichever
+   channel `kiosk_settings.parent_notification_channel` (`disabled` / `whatsapp` / `sms`) picks. This
+   is the admin-panel path only in the sense that the channel picker lives in Settings — the send
+   itself runs entirely in the Edge Function regardless of whether anyone has the dashboard open,
+   since it's triggered off the same `attendance_logs` table `mark_attendance()` writes to.
 
 ### Key files (kiosk_app)
 
@@ -127,6 +134,22 @@ to grant those two accounts their `profiles.role`. Enable the `vector` extension
   on `profiles`, and `verify_enrollment_pin()` / `enroll_member()` / `record_member_photo()` /
   `set_enrollment_pin()`. PINs are hashed with pgcrypto (`crypt()`/`gen_salt('bf')`) and never stored
   or transmitted as plaintext outside a single RPC call.
+- `migrations/0016_parent_contacts.sql` — `mother_phone`/`father_phone` etc. on `employees`, the data
+  that `functions/send-attendance-whatsapp` sends to.
+- `migrations/0021_whatsapp_notifications.sql` / `0023_notification_channel.sql` — the
+  `attendance_notification_log` delivery log, and `kiosk_settings.parent_notification_channel`
+  (`disabled` / `whatsapp` / `sms`; 0023 replaced 0021's original WhatsApp-only boolean toggle).
+- `migrations/0022_attendance_whatsapp_webhook_trigger.sql` — the `pg_net` trigger on
+  `attendance_logs` INSERT that calls the Edge Function below, with the shared secret it
+  authenticates with embedded in the trigger body (must match the function's
+  `ATTENDANCE_WEBHOOK_SECRET` secret — see that migration's header comment if it's ever rotated).
+- `functions/send-attendance-whatsapp/` — Edge Function invoked by the above trigger; sends the
+  Twilio WhatsApp/SMS message depending on the selected channel. WhatsApp needs an approved Content
+  Template (`TWILIO_CONTENT_SID`) since attendance pings are always business-initiated; SMS to Indian
+  numbers needs DLT template registration; both need a non-trial Twilio account for real (non-
+  Sandbox, non-verified-number) recipients. Twilio credentials live only in Edge Function secrets
+  (`supabase secrets set`), never in `kiosk_app`/`admin_panel` env files — see the README in that
+  folder for full setup.
 
 ### Key files (admin_panel)
 

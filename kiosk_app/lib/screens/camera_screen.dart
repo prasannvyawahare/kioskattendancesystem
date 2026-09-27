@@ -200,8 +200,13 @@ class _CameraScreenState extends State<CameraScreen> {
   /// time. Paired with _startCamera() when enrollment screens are popped.
   Future<void> _stopCamera() async {
     final controller = _controller;
-    _controller = null;
     if (controller == null) return;
+    _controller = null;
+    // Unmount CameraPreview *before* awaiting the async stop/dispose calls
+    // below -- on some Android camera backends, disposing a controller while
+    // its Texture widget is still in the tree flashes a stale/garbage frame
+    // (seen as a red screen flash) during the teardown handshake.
+    if (mounted) setState(() {});
     try {
       if (controller.value.isStreamingImages) {
         await controller.stopImageStream();
@@ -332,7 +337,7 @@ class _CameraScreenState extends State<CameraScreen> {
           _greetingService?.speakCheckIn(match.employee.fullName);
           _showResult(
             title: 'Welcome, ${match.employee.fullName}',
-            subtitle: 'Checked in at ${_formatNow()}',
+            subtitle: 'Timed in at ${_formatNow()}',
             color: Colors.teal,
             expression: MascotExpression.happy,
           );
@@ -341,7 +346,7 @@ class _CameraScreenState extends State<CameraScreen> {
           _greetingService?.speakCheckOut(match.employee.fullName);
           _showResult(
             title: 'Goodbye, ${match.employee.fullName}',
-            subtitle: 'Checked out at ${_formatNow()}',
+            subtitle: 'Timed out at ${_formatNow()}',
             color: Colors.blueGrey,
             expression: MascotExpression.happy,
           );
@@ -646,7 +651,7 @@ class _IdleClockScreenState extends State<_IdleClockScreen> {
           ),
           const SizedBox(height: 40),
           const Text(
-            'Stand in front of the camera to check in',
+            'Stand in front of the camera to mark attendance',
             style: TextStyle(color: Colors.black45, fontSize: 16),
           ),
         ],

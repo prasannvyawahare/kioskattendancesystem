@@ -4,6 +4,12 @@ import { randomUUID } from "crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import type { Gender } from "@/lib/database.types";
+
+function parseGender(formData: FormData): Gender | null {
+  const value = String(formData.get("gender") ?? "");
+  return value === "male" || value === "female" || value === "other" ? value : null;
+}
 
 // Mirrors MIN_PHOTOS in register-employee-form.tsx -- the client already
 // disables submit below this count, but the server action is the actual
@@ -25,6 +31,7 @@ export async function registerEmployee(formData: FormData) {
   const employee_code = String(formData.get("employee_code") ?? "").trim() || null;
   const standard = String(formData.get("standard") ?? "").trim() || null;
   const section = String(formData.get("section") ?? "").trim() || null;
+  const gender = parseGender(formData);
   const mother_name = String(formData.get("mother_name") ?? "").trim() || null;
   const mother_phone = String(formData.get("mother_phone") ?? "").trim() || null;
   const mother_email = String(formData.get("mother_email") ?? "").trim() || null;
@@ -54,6 +61,7 @@ export async function registerEmployee(formData: FormData) {
       employee_code,
       standard,
       section,
+      gender,
       mother_name,
       mother_phone,
       mother_email,
@@ -100,6 +108,7 @@ export async function updateEmployee(employeeId: string, formData: FormData) {
   const employee_code = String(formData.get("employee_code") ?? "").trim() || null;
   const standard = String(formData.get("standard") ?? "").trim() || null;
   const section = String(formData.get("section") ?? "").trim() || null;
+  const gender = parseGender(formData);
   const mother_name = String(formData.get("mother_name") ?? "").trim() || null;
   const mother_phone = String(formData.get("mother_phone") ?? "").trim() || null;
   const mother_email = String(formData.get("mother_email") ?? "").trim() || null;
@@ -121,6 +130,7 @@ export async function updateEmployee(employeeId: string, formData: FormData) {
       employee_code,
       standard,
       section,
+      gender,
       mother_name,
       mother_phone,
       mother_email,

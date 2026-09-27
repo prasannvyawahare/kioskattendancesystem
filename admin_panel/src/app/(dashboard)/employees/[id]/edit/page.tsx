@@ -42,6 +42,22 @@ export default async function EditEmployeePage({
           <Field label="Department" name="department" defaultValue={employee.department} />
           <Field label="Standard" name="standard" defaultValue={employee.standard} />
           <Field label="Section" name="section" defaultValue={employee.section} />
+          <div className="space-y-1">
+            <label htmlFor="gender" className="text-sm font-medium text-slate-700">
+              Gender
+            </label>
+            <select
+              id="gender"
+              name="gender"
+              defaultValue={employee.gender ?? ""}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+            >
+              <option value="">Not specified</option>
+              <option value="male">Boy</option>
+              <option value="female">Girl</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
         </div>
 
         <div className="space-y-4 rounded-xl border border-slate-200 p-4">

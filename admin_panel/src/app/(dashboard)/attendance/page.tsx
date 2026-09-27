@@ -4,12 +4,23 @@ import { ExportCsvButton } from "./export-csv-button";
 import { DeleteLogButton } from "./DeleteLogButton";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { MonthCalendar, type CalendarCell } from "@/components/MonthCalendar";
+import { StudentFilterFields } from "@/components/StudentFilterFields";
 import { pad, todayIso } from "@/lib/date-utils";
+import { isNonWorkingDay, eventTypeLabel } from "@/lib/attendance-status";
+import { applyStudentFilters, distinctValues, filterQueryString } from "@/lib/student-filters";
 
 export default async function AttendancePage({
   searchParams,
 }: {
-  searchParams: { date?: string; employee_id?: string; cal?: string; error?: string };
+  searchParams: {
+    date?: string;
+    employee_id?: string;
+    cal?: string;
+    error?: string;
+    department?: string;
+    standard?: string;
+    section?: string;
+  };
 }) {
   const supabase = createClient();
 
@@ -42,6 +53,27 @@ export default async function AttendancePage({
     year: "numeric",
   });
 
+  const filters = {
+    department: searchParams.department,
+    standard: searchParams.standard,
+    section: searchParams.section,
+  };
+  const filterQuery = filterQueryString(filters);
+  const hasStudentFilters = Boolean(filters.department || filters.standard || filters.section);
+
+  // Resolved first (rather than folded into the Promise.all below) because
+  // logsQuery/calLogs both need the id list before they can be built.
+  const [{ data: allActive }, { data: filterMatches }] = await Promise.all([
+    supabase.from("employees").select("department, standard, section").eq("is_active", true),
+    hasStudentFilters
+      ? applyStudentFilters(supabase.from("employees").select("id"), filters)
+      : Promise.resolve({ data: null }),
+  ]);
+  const departments = distinctValues(allActive, "department");
+  const standards = distinctValues(allActive, "standard");
+  const sections = distinctValues(allActive, "section");
+  const filteredEmployeeIds = hasStudentFilters ? (filterMatches ?? []).map((e) => e.id) : null;
+
   let logsQuery = supabase
     .from("attendance_logs")
     .select("id, employee_id, event_type, event_date, scanned_at, confidence")
@@ -49,19 +81,30 @@ export default async function AttendancePage({
     .limit(200);
   if (searchParams.date) logsQuery = logsQuery.eq("event_date", searchParams.date);
   if (searchParams.employee_id) logsQuery = logsQuery.eq("employee_id", searchParams.employee_id);
+  if (filteredEmployeeIds) logsQuery = logsQuery.in("employee_id", filteredEmployeeIds);
+
+  let calLogsQuery = supabase
+    .from("attendance_logs")
+    .select("employee_id, event_date")
+    .in("event_type", ["check_in", "check_out"])
+    .gte("event_date", calMonthStart)
+    .lte("event_date", calMonthEnd);
+  if (filteredEmployeeIds) calLogsQuery = calLogsQuery.in("employee_id", filteredEmployeeIds);
 
   // Independent queries -- run concurrently rather than paying three
   // sequential Supabase round-trips back to back.
-  const [{ data: employees }, { data: logs }, { data: calLogs }] = await Promise.all([
+  const [{ data: employees }, { data: logs }, { data: calLogs }, { data: holidayRows }] = await Promise.all([
     supabase.from("employees").select("id, full_name").order("full_name"),
     logsQuery,
+    calLogsQuery,
     supabase
-      .from("attendance_logs")
-      .select("employee_id, event_date")
-      .in("event_type", ["check_in", "check_out"])
-      .gte("event_date", calMonthStart)
-      .lte("event_date", calMonthEnd),
+      .from("holidays")
+      .select("holiday_date, name")
+      .gte("holiday_date", calMonthStart)
+      .lte("holiday_date", calMonthEnd),
   ]);
+  const holidaySet = new Set((holidayRows ?? []).map((h) => h.holiday_date));
+  const holidayNameByDate = new Map((holidayRows ?? []).map((h) => [h.holiday_date, h.name]));
 
   const nameById = new Map((employees ?? []).map((e) => [e.id, e.full_name]));
   const rows = (logs ?? []).map((log) => ({
@@ -80,7 +123,7 @@ export default async function AttendancePage({
   const today = todayIso();
 
   function calLink(dateStr: string, monthValue: string) {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams(filterQuery);
     params.set("date", dateStr);
     params.set("cal", monthValue);
     if (searchParams.employee_id) params.set("employee_id", searchParams.employee_id);
@@ -88,7 +131,7 @@ export default async function AttendancePage({
   }
 
   function calMonthLink(monthValue: string) {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams(filterQuery);
     if (searchParams.date) params.set("date", searchParams.date);
     if (searchParams.employee_id) params.set("employee_id", searchParams.employee_id);
     params.set("cal", monthValue);
@@ -98,6 +141,16 @@ export default async function AttendancePage({
   const calCells: CalendarCell[] = calDayNumbers.map((d) => {
     const count = presentByDay.get(d)?.size ?? 0;
     const dateStr = `${calMonthValue}-${pad(d)}`;
+    if (isNonWorkingDay(calYear, calMonth, d, holidaySet)) {
+      return {
+        day: d,
+        href: calLink(dateStr, calMonthValue),
+        label: holidayNameByDate.get(dateStr) ?? "NA",
+        tone: "na",
+        isSelected: searchParams.date === dateStr,
+        isToday: dateStr === today,
+      };
+    }
     let tone: CalendarCell["tone"] = "empty";
     if (count > 0) {
       const ratio = count / maxDayCount;
@@ -134,25 +187,22 @@ export default async function AttendancePage({
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
         <div className="w-full shrink-0 space-y-2 lg:w-72">
-          <div className="flex items-center justify-between text-sm">
-            <Link
-              href={calMonthLink(prevCalValue)}
-              className="rounded px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-            >
-              ←
-            </Link>
-            <span className="font-medium text-slate-900">{calMonthLabel}</span>
-            <Link
-              href={calMonthLink(nextCalValue)}
-              className="rounded px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-            >
-              →
-            </Link>
-          </div>
-          <MonthCalendar year={calYear} month={calMonth} cells={calCells} />
+          <MonthCalendar
+            year={calYear}
+            month={calMonth}
+            cells={calCells}
+            title={calMonthLabel}
+            prevHref={calMonthLink(prevCalValue)}
+            nextHref={calMonthLink(nextCalValue)}
+          />
           {searchParams.date && (
             <Link
-              href={`/attendance${searchParams.employee_id ? `?employee_id=${searchParams.employee_id}` : ""}`}
+              href={(() => {
+                const params = new URLSearchParams(filterQuery);
+                if (searchParams.employee_id) params.set("employee_id", searchParams.employee_id);
+                const qs = params.toString();
+                return `/attendance${qs ? `?${qs}` : ""}`;
+              })()}
               className="block text-center text-xs text-slate-500 hover:text-slate-900"
             >
               Clear date filter
@@ -192,6 +242,14 @@ export default async function AttendancePage({
                 ))}
               </select>
             </div>
+            <StudentFilterFields
+              departments={departments}
+              standards={standards}
+              sections={sections}
+              department={searchParams.department}
+              standard={searchParams.standard}
+              section={searchParams.section}
+            />
             <button
               type="submit"
               className="self-end rounded-md bg-indigo-600 px-3 py-1.5 font-medium text-white hover:bg-indigo-500"
@@ -216,9 +274,7 @@ export default async function AttendancePage({
                 {rows.map((row) => (
                   <tr key={row.id} className="border-b border-slate-100 last:border-0">
                     <td className="px-4 py-3 font-medium text-slate-900">{row.employee_name}</td>
-                    <td className="px-4 py-3 capitalize text-slate-600">
-                      {row.event_type.replace("_", " ")}
-                    </td>
+                    <td className="px-4 py-3 text-slate-600">{eventTypeLabel(row.event_type)}</td>
                     <td className="px-4 py-3 text-slate-600">{row.event_date}</td>
                     <td className="px-4 py-3 text-slate-600">
                       {new Date(row.scanned_at).toLocaleTimeString()}
@@ -227,7 +283,7 @@ export default async function AttendancePage({
                       {row.confidence != null ? row.confidence.toFixed(2) : "-"}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <DeleteLogButton logId={row.id} label={row.event_type.replace("_", " ")} />
+                      <DeleteLogButton logId={row.id} label={eventTypeLabel(row.event_type)} />
                     </td>
                   </tr>
                 ))}

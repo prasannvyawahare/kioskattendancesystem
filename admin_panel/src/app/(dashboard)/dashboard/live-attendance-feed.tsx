@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { AttendanceEventType } from "@/lib/database.types";
+import { eventTypeLabel } from "@/lib/attendance-status";
 
 type LogRow = {
   id: string;
@@ -96,13 +97,13 @@ export function LiveAttendanceFeed({
             </span>
             <span className="flex-1 truncate font-medium text-slate-900">{log.employee_name}</span>
             <span
-              className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium capitalize ${
+              className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
                 log.event_type === "check_in"
                   ? "bg-emerald-50 text-emerald-600"
                   : "bg-amber-50 text-amber-600"
               }`}
             >
-              {log.event_type.replace("_", " ")}
+              {eventTypeLabel(log.event_type)}
             </span>
             <span className="w-16 shrink-0 text-right text-slate-500">
               {new Date(log.scanned_at).toLocaleTimeString()}

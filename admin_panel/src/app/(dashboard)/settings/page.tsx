@@ -42,12 +42,12 @@ export default async function SettingsPage({
         </div>
 
         <TextArea
-          label="Check-in greeting"
+          label="Time In greeting"
           name="checkin_greeting_template"
           defaultValue={settings?.checkin_greeting_template}
         />
         <TextArea
-          label="Check-out greeting"
+          label="Time Out greeting"
           name="checkout_greeting_template"
           defaultValue={settings?.checkout_greeting_template}
         />
@@ -61,7 +61,7 @@ export default async function SettingsPage({
             label="Voice greeting"
             name="voice_enabled"
             defaultChecked={settings?.voice_enabled}
-            hint="Speak the greeting aloud on check-in/check-out. Off shows the result silently."
+            hint="Speak the greeting aloud on Time In/Time Out. Off shows the result silently."
           />
           <Toggle
             label="On-device enrollment"
@@ -73,11 +73,36 @@ export default async function SettingsPage({
 
         <div className="space-y-3 rounded-xl border border-slate-200 p-4">
           <div>
+            <h2 className="text-sm font-semibold text-slate-900">Parent notifications</h2>
+            <p className="text-xs text-slate-500">
+              Notifies mother_phone/father_phone (via Twilio) on every Time In and Time Out.
+              Requires the send-attendance-whatsapp Edge Function and its Database Webhook to be set
+              up first -- see supabase/functions/send-attendance-whatsapp/README.md. WhatsApp needs
+              either an opted-in Sandbox recipient or an approved Content Template on a non-trial
+              Twilio account; SMS to Indian numbers needs DLT template registration on a non-trial
+              account. Until one of those is set up, sends will fail (visible in
+              attendance_notification_log) even with a channel selected here.
+            </p>
+          </div>
+          <Select
+            label="Notification channel"
+            name="parent_notification_channel"
+            defaultValue={settings?.parent_notification_channel ?? "disabled"}
+            options={[
+              { value: "disabled", label: "Disabled" },
+              { value: "whatsapp", label: "WhatsApp" },
+              { value: "sms", label: "SMS" },
+            ]}
+          />
+        </div>
+
+        <div className="space-y-3 rounded-xl border border-slate-200 p-4">
+          <div>
             <h2 className="text-sm font-semibold text-slate-900">Kiosk timing</h2>
             <p className="text-xs text-slate-500">
               How long kiosks wait for the server before falling back to offline mode, how often
-              they auto-sync/refresh in the background, and the minimum gap between a check-in and
-              check-out for the same person.
+              they auto-sync/refresh in the background, and the minimum gap between a Time In and
+              Time Out for the same person.
             </p>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -88,7 +113,7 @@ export default async function SettingsPage({
               hint="How long a scan/PIN check waits for the server before using the offline path."
             />
             <NumberField
-              label="Min. check-in/check-out gap (minutes)"
+              label="Min. Time In/Time Out gap (minutes)"
               name="min_scan_gap_minutes"
               defaultValue={settings?.min_scan_gap_minutes}
               hint="Also enforced server-side, so this can't be bypassed by an offline kiosk."
@@ -217,6 +242,41 @@ function TextArea({
         defaultValue={defaultValue ?? ""}
         className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
       />
+    </div>
+  );
+}
+
+function Select({
+  label,
+  name,
+  defaultValue,
+  options,
+  hint,
+}: {
+  label: string;
+  name: string;
+  defaultValue?: string | null;
+  options: { value: string; label: string }[];
+  hint?: string;
+}) {
+  return (
+    <div className="space-y-1">
+      <label htmlFor={name} className="text-sm font-medium text-slate-700">
+        {label}
+      </label>
+      <select
+        id={name}
+        name={name}
+        defaultValue={defaultValue ?? options[0]?.value}
+        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {hint && <p className="text-xs text-slate-500">{hint}</p>}
     </div>
   );
 }

@@ -19,7 +19,7 @@ export default async function DashboardPage() {
     // who *hasn't* shown up yet and to break attendance down by department.
     supabase
       .from("employees")
-      .select("id, full_name, department")
+      .select("id, full_name, department, gender")
       .eq("is_active", true)
       .order("full_name"),
   ]);
@@ -38,6 +38,8 @@ export default async function DashboardPage() {
   );
   const roster = activeEmployees ?? [];
   const absentStudents = roster.filter((e) => !presentIds.has(e.id));
+  const boyCount = roster.filter((e) => e.gender === "male").length;
+  const girlCount = roster.filter((e) => e.gender === "female").length;
 
   const departmentStats = new Map<string, { active: number; present: number }>();
   for (const e of roster) {
@@ -61,14 +63,16 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Active students" value={roster.length} accent="violet" icon={<UsersIcon />} />
-        <StatCard label="Check-ins today" value={checkIns} accent="emerald" icon={<CheckInIcon />} />
-        <StatCard label="Check-outs today" value={checkOuts} accent="amber" icon={<CheckOutIcon />} />
+        <StatCard label="Time-ins today" value={checkIns} accent="emerald" icon={<CheckInIcon />} />
+        <StatCard label="Time-outs today" value={checkOuts} accent="amber" icon={<CheckOutIcon />} />
         <StatCard
           label="Absent today"
           value={absentStudents.length}
           accent="rose"
           icon={<AbsentIcon />}
         />
+        <StatCard label="Boys" value={boyCount} accent="blue" icon={<BoyIcon />} />
+        <StatCard label="Girls" value={girlCount} accent="pink" icon={<GirlIcon />} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -98,7 +102,7 @@ export default async function DashboardPage() {
             ))}
             {absentStudents.length === 0 && (
               <li className="px-4 py-8 text-center text-slate-400">
-                Everyone active has checked in today.
+                Everyone active has timed in today.
               </li>
             )}
           </ul>
@@ -147,10 +151,12 @@ function initials(name: string) {
 }
 
 const ACCENT_CLASSES = {
-  violet: "bg-violet-600",
-  emerald: "bg-emerald-500",
-  amber: "bg-amber-500",
-  rose: "bg-rose-500",
+  violet: "bg-gradient-to-br from-violet-500 to-violet-700 shadow-violet-500/30",
+  emerald: "bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-emerald-500/30",
+  amber: "bg-gradient-to-br from-amber-400 to-amber-600 shadow-amber-500/30",
+  rose: "bg-gradient-to-br from-rose-400 to-rose-600 shadow-rose-500/30",
+  blue: "bg-gradient-to-br from-blue-400 to-blue-600 shadow-blue-500/30",
+  pink: "bg-gradient-to-br from-pink-400 to-pink-600 shadow-pink-500/30",
 } as const;
 
 function StatCard({
@@ -165,15 +171,19 @@ function StatCard({
   icon: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-4 rounded-2xl bg-white p-5 shadow-sm shadow-slate-200/60">
+    <div
+      className={`relative flex items-center gap-4 overflow-hidden rounded-2xl p-5 text-white shadow-lg ${ACCENT_CLASSES[accent]}`}
+    >
       <span
-        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white ${ACCENT_CLASSES[accent]}`}
-      >
+        className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-white/10"
+        aria-hidden
+      />
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
         {icon}
       </span>
-      <div>
-        <p className="text-sm text-slate-500">{label}</p>
-        <p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p>
+      <div className="relative">
+        <p className="text-sm text-white/80">{label}</p>
+        <p className="mt-1 text-2xl font-semibold">{value}</p>
       </div>
     </div>
   );
@@ -214,6 +224,26 @@ function AbsentIcon() {
       <circle cx="10" cy="8.5" r="3" stroke="currentColor" />
       <path d="M3.5 19c1-3.2 3.2-5 6.5-5s5.5 1.8 6.5 5" stroke="currentColor" strokeLinecap="round" />
       <path d="M17 8.5l3.5 3.5M20.5 8.5L17 12" stroke="currentColor" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// Mars symbol -- conventional "boys" glyph.
+function BoyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} className="h-6 w-6">
+      <circle cx="10" cy="14" r="6" stroke="currentColor" />
+      <path d="M14.5 9.5L20 4M14.5 4h5.5v5.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// Venus symbol -- conventional "girls" glyph.
+function GirlIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.75} className="h-6 w-6">
+      <circle cx="12" cy="9" r="6" stroke="currentColor" />
+      <path d="M12 15v6M9 18h6" stroke="currentColor" strokeLinecap="round" />
     </svg>
   );
 }

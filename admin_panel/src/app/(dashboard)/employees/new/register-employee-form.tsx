@@ -114,6 +114,7 @@ export function RegisterEmployeeForm() {
         <Field label="Department" name="department" />
         <Field label="Standard" name="standard" />
         <Field label="Section" name="section" />
+        <GenderSelect />
       </div>
 
       <div className="space-y-4 rounded-xl border border-slate-200 p-4">
@@ -211,6 +212,27 @@ export function RegisterEmployeeForm() {
         {isPending ? "Registering..." : "Register student"}
       </button>
     </form>
+  );
+}
+
+function GenderSelect() {
+  return (
+    <div className="space-y-1">
+      <label htmlFor="gender" className="text-sm font-medium text-slate-700">
+        Gender
+      </label>
+      <select
+        id="gender"
+        name="gender"
+        defaultValue=""
+        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
+      >
+        <option value="">Not specified</option>
+        <option value="male">Boy</option>
+        <option value="female">Girl</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
   );
 }
 
