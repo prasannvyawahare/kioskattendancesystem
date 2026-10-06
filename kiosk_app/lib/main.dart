@@ -11,6 +11,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config.dart';
 import 'screens/camera_screen.dart';
+import 'screens/device_setup_screen.dart';
+import 'services/device_credentials_store.dart';
 import 'services/error_logger.dart';
 import 'services/ist_clock.dart';
 import 'services/kiosk_backend.dart';
@@ -69,19 +71,29 @@ Future<void> main() async {
     // implementation and changing only this one line.
     KioskBackend.instance = SupabaseBackend();
 
-    // Offline-first: a no-network sign-in failure at cold boot must not stop
-    // the kiosk from starting. Supabase.initialize() above already restored
-    // any session persisted from a previous successful sign-in, so the app
-    // can still function (cached roster, offline queueing) until SyncService
-    // manages to sign in for real. See SyncService._ensureSession for the
-    // retry.
-    try {
-      await KioskBackend.instance.signInAsKiosk().timeout(const Duration(seconds: 8));
-    } catch (e) {
-      debugPrint('Kiosk sign-in failed at startup (continuing offline): $e');
+    // A device with no paired identity yet (DeviceCredentialsStore empty
+    // and no --dart-define KIOSK_EMAIL/PASSWORD fallback) has nothing to
+    // sign in with at all -- skip straight to DeviceSetupScreen instead of
+    // attempting (and failing) a sign-in with empty credentials.
+    final storedCredentials = await DeviceCredentialsStore.instance.read();
+    final isPaired = storedCredentials != null ||
+        (KioskConfig.kioskEmail.isNotEmpty && KioskConfig.kioskPassword.isNotEmpty);
+
+    if (isPaired) {
+      // Offline-first: a no-network sign-in failure at cold boot must not
+      // stop the kiosk from starting. Supabase.initialize() above already
+      // restored any session persisted from a previous successful sign-in,
+      // so the app can still function (cached roster, offline queueing)
+      // until SyncService manages to sign in for real. See
+      // SyncService._ensureSession for the retry.
+      try {
+        await KioskBackend.instance.signInAsKiosk().timeout(const Duration(seconds: 8));
+      } catch (e) {
+        debugPrint('Kiosk sign-in failed at startup (continuing offline): $e');
+      }
     }
 
-    runApp(const KioskApp());
+    runApp(KioskApp(isPaired: isPaired));
   }, (error, stack) {
     ErrorLogger.log(error, stackTrace: stack, context: 'runZonedGuarded');
   });
@@ -114,7 +126,12 @@ Future<void> _pruneOldAttendanceState() async {
 }
 
 class KioskApp extends StatelessWidget {
-  const KioskApp({super.key});
+  const KioskApp({super.key, required this.isPaired});
+
+  /// Whether this launch resolved a device identity to sign in with --
+  /// decides whether the kiosk opens straight to the camera or to
+  /// DeviceSetupScreen first. See main()'s startup sequence above.
+  final bool isPaired;
 
   @override
   Widget build(BuildContext context) {
@@ -126,7 +143,7 @@ class KioskApp extends StatelessWidget {
         useMaterial3: true,
         colorSchemeSeed: Colors.teal,
       ),
-      home: const CameraScreen(),
+      home: isPaired ? const CameraScreen() : const DeviceSetupScreen(),
     );
   }
 }

@@ -3,9 +3,11 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config.dart';
+import '../models/device_identity.dart';
 import '../models/enrolled_employee.dart';
 import '../models/kiosk_settings.dart';
 import '../models/member_summary.dart';
+import 'device_credentials_store.dart';
 import 'error_logger.dart';
 import 'kiosk_backend.dart';
 
@@ -35,11 +37,59 @@ class SupabaseBackend implements KioskBackend {
   /// and removes that whole class of bug.
   @override
   Future<void> signInAsKiosk() async {
-    await _client.auth.signInWithPassword(
-      email: KioskConfig.kioskEmail,
-      password: KioskConfig.kioskPassword,
-    );
+    // Paired (DeviceSetupScreen) credentials take priority over the
+    // dart-define fallback -- a tablet that's been paired has an explicit,
+    // admin-assigned identity that shouldn't be silently overridden by
+    // whatever this particular build happened to be compiled with.
+    final stored = await DeviceCredentialsStore.instance.read();
+    final email = stored?.email ?? KioskConfig.kioskEmail;
+    final password = stored?.password ?? KioskConfig.kioskPassword;
+    if (email.isEmpty || password.isEmpty) {
+      throw BackendAuthException('This device is not paired yet.');
+    }
+    await _client.auth.signInWithPassword(email: email, password: password);
   }
+
+  @override
+  Future<DeviceIdentity> verifyDeviceCredentials({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      await _client.auth.signInWithPassword(email: email, password: password);
+    } on AuthException catch (e) {
+      throw BackendAuthException(e.message);
+    }
+
+    try {
+      return await fetchDeviceIdentity();
+    } catch (_) {
+      // Signed in with valid credentials for a non-kiosk account (or the
+      // profile lookup itself failed) -- don't leave that session active.
+      await _client.auth.signOut();
+      rethrow;
+    }
+  }
+
+  @override
+  Future<DeviceIdentity> fetchDeviceIdentity() async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) throw BackendAuthException('Not signed in');
+
+    final row = await _client
+        .from('profiles')
+        .select('role, device_label, full_name, assigned_standard, assigned_section')
+        .eq('id', uid)
+        .single();
+
+    if (row['role'] != 'kiosk') {
+      throw BackendAuthException('That account is not a kiosk device.');
+    }
+    return DeviceIdentity.fromRow(row);
+  }
+
+  @override
+  Future<void> signOut() => _client.auth.signOut();
 
   @override
   Future<List<EnrolledEmployee>> fetchEnrolledEmployees() async {

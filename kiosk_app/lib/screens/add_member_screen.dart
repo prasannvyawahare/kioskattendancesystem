@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:image/image.dart' as img;
 
+import '../models/device_identity.dart';
 import '../services/embedding_service.dart';
 import '../services/face_image_utils.dart';
 import '../services/kiosk_backend.dart';
@@ -75,6 +76,31 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
   bool _submitting = false;
   DateTime? _cooldownUntil;
   String? _error;
+
+  /// Null until fetched (best-effort, see initState). When class-scoped,
+  /// enroll_member()/update_member() force standard/section to this
+  /// device's own assignment server-side regardless of what's submitted
+  /// (supabase/migrations/0026_kiosk_device_scoping.sql) -- the standard/
+  /// section fields are locked to match rather than left editable-but-
+  /// overridden, so this screen doesn't show a value that silently won't
+  /// be the one actually saved.
+  DeviceIdentity? _deviceIdentity;
+
+  @override
+  void initState() {
+    super.initState();
+    KioskBackend.instance.fetchDeviceIdentity().then((identity) {
+      if (!mounted || !identity.isClassScoped) return;
+      setState(() {
+        _deviceIdentity = identity;
+        _standardController.text = identity.standard ?? '';
+        _sectionController.text = identity.section ?? '';
+      });
+    }).catchError((_) {
+      // Best-effort -- an unrestricted/legacy device, or a transient
+      // fetch failure, just leaves the fields freely editable as before.
+    });
+  }
 
   Future<void> _openCamera() async {
     if (_cameraOpening || _cameraReady) return;
@@ -322,12 +348,24 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _standardController,
-                  decoration: const InputDecoration(labelText: 'Standard (optional)'),
+                  readOnly: _deviceIdentity != null,
+                  decoration: InputDecoration(
+                    labelText: 'Standard (optional)',
+                    helperText: _deviceIdentity != null
+                        ? 'Locked to this device\'s assigned class'
+                        : null,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _sectionController,
-                  decoration: const InputDecoration(labelText: 'Section (optional)'),
+                  readOnly: _deviceIdentity != null,
+                  decoration: InputDecoration(
+                    labelText: 'Section (optional)',
+                    helperText: _deviceIdentity != null
+                        ? 'Locked to this device\'s assigned class'
+                        : null,
+                  ),
                 ),
                 const SizedBox(height: 20),
                 Text('Parent / guardian details', style: Theme.of(context).textTheme.titleMedium),

@@ -5,6 +5,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
+import '../models/device_identity.dart';
 import '../services/attendance_mode_service.dart';
 import '../services/attendance_service.dart';
 import '../services/embedding_service.dart';
@@ -13,6 +14,7 @@ import '../services/error_logger.dart';
 import '../services/face_image_utils.dart';
 import '../services/face_matcher.dart';
 import '../services/greeting_service.dart';
+import '../services/kiosk_backend.dart';
 import '../services/kiosk_settings_service.dart';
 import '../services/sync_service.dart';
 import '../widgets/mascot_avatar.dart';
@@ -54,6 +56,7 @@ class _CameraScreenState extends State<CameraScreen> {
   EmbeddingService? _embeddingService;
   EnrollmentSyncService? _enrollmentSync;
   GreetingService? _greetingService;
+  DeviceIdentity? _deviceIdentity;
   Timer? _employeeRefreshTimer;
   Timer? _syncTimer;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
@@ -96,6 +99,18 @@ class _CameraScreenState extends State<CameraScreen> {
     // admin-configurable, see KioskSettings) are populated from the real
     // fetched row, not just defaults, by the time anything reads them.
     await _settingsService.start();
+
+    // Best-effort, non-blocking: if this fails (e.g. offline at cold boot)
+    // the badge just doesn't show this launch rather than holding up the
+    // rest of setup -- it's purely informational for whoever is standing
+    // at the tablet.
+    unawaited(
+      KioskBackend.instance.fetchDeviceIdentity().then((identity) {
+        if (mounted) setState(() => _deviceIdentity = identity);
+      }).catchError((e) {
+        debugPrint('Could not fetch device identity: $e');
+      }),
+    );
 
     _attendanceModeService = AttendanceModeService();
     await _attendanceModeService.load();
@@ -471,6 +486,24 @@ class _CameraScreenState extends State<CameraScreen> {
               top: 24,
               right: 16,
               child: SafeArea(child: _buildMascot()),
+            ),
+          if (_deviceIdentity?.classLabel != null)
+            Positioned(
+              top: 12,
+              left: 84,
+              child: SafeArea(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    'Class ${_deviceIdentity!.classLabel}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ),
+              ),
             ),
           if (_statusMessage != null)
             Center(

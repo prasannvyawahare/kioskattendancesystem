@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../models/attendance_mode.dart';
+import '../models/device_identity.dart';
 import '../services/attendance_mode_service.dart';
+import '../services/device_credentials_store.dart';
+import '../services/kiosk_backend.dart';
 import '../services/kiosk_lock_task_service.dart';
 import '../services/sync_service.dart';
+import 'device_setup_screen.dart';
 import 'error_log_screen.dart';
 
 const _modeLabels = {
@@ -23,7 +27,7 @@ const _modeDescriptions = {
 /// or check-out-only (AttendanceModeService, device-local -- not synced to
 /// admin_panel) and trigger a manual sync of anything queued while offline
 /// (SyncService).
-class DeviceSettingsScreen extends StatelessWidget {
+class DeviceSettingsScreen extends StatefulWidget {
   const DeviceSettingsScreen({
     super.key,
     required this.attendanceModeService,
@@ -33,8 +37,23 @@ class DeviceSettingsScreen extends StatelessWidget {
   final AttendanceModeService attendanceModeService;
   final SyncService syncService;
 
+  @override
+  State<DeviceSettingsScreen> createState() => _DeviceSettingsScreenState();
+}
+
+class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
+  DeviceIdentity? _deviceIdentity;
+
+  @override
+  void initState() {
+    super.initState();
+    KioskBackend.instance.fetchDeviceIdentity().then((identity) {
+      if (mounted) setState(() => _deviceIdentity = identity);
+    }).catchError((_) {});
+  }
+
   Future<void> _sync(BuildContext context) async {
-    final result = await syncService.syncNow(manual: true);
+    final result = await widget.syncService.syncNow(manual: true);
     if (!context.mounted) return;
 
     final message = switch (result.outcome) {
@@ -43,6 +62,47 @@ class DeviceSettingsScreen extends StatelessWidget {
       SyncOutcome.failed => 'Sync failed -- will retry automatically. (${result.error})',
     };
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// Clears this device's paired identity and returns to
+  /// DeviceSetupScreen, as the new navigation root -- used when a tablet
+  /// is being handed off to a different class (or otherwise needs a fresh
+  /// setup code from the admin panel's Devices page).
+  Future<void> _rePair(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Re-pair this device?'),
+        content: const Text(
+          'Signs this tablet out of its current device identity. You\'ll need a new '
+          'setup code from the admin panel\'s Devices page to use it again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Re-pair'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await DeviceCredentialsStore.instance.clear();
+    try {
+      await KioskBackend.instance.signOut();
+    } catch (_) {
+      // Best-effort -- credentials are already cleared locally, which is
+      // what actually matters for falling back to DeviceSetupScreen.
+    }
+    if (!context.mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const DeviceSetupScreen()),
+      (route) => false,
+    );
   }
 
   Future<void> _unpin(BuildContext context) async {
@@ -86,6 +146,23 @@ class DeviceSettingsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          const Text('Device identity', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 4),
+          Text(
+            _deviceIdentity == null
+                ? 'Loading...'
+                : _deviceIdentity!.classLabel != null
+                    ? '${_deviceIdentity!.label} -- assigned to Class ${_deviceIdentity!.classLabel}'
+                    : '${_deviceIdentity!.label} -- sees all classes',
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () => _rePair(context),
+            icon: const Icon(Icons.swap_horiz),
+            label: const Text('Re-pair this device'),
+          ),
+          const Divider(height: 40),
           const Text('Attendance mode', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 4),
           Text(
@@ -95,12 +172,12 @@ class DeviceSettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           ValueListenableBuilder<AttendanceMode>(
-            valueListenable: attendanceModeService.mode,
+            valueListenable: widget.attendanceModeService.mode,
             builder: (context, mode, _) {
               return RadioGroup<AttendanceMode>(
                 groupValue: mode,
                 onChanged: (value) {
-                  if (value != null) attendanceModeService.setMode(value);
+                  if (value != null) widget.attendanceModeService.setMode(value);
                 },
                 child: Column(
                   children: AttendanceMode.values.map((option) {
@@ -118,7 +195,7 @@ class DeviceSettingsScreen extends StatelessWidget {
           const Text('Sync', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 8),
           ValueListenableBuilder<SyncStatus>(
-            valueListenable: syncService.status,
+            valueListenable: widget.syncService.status,
             builder: (context, status, _) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import '../models/device_identity.dart';
 import '../models/enrolled_employee.dart';
 import '../models/kiosk_settings.dart';
 import '../models/member_summary.dart';
@@ -24,6 +25,27 @@ abstract class KioskBackend {
   /// SyncService before every sync, so implementations should be safe to
   /// call repeatedly (idempotent re-auth, not "already signed in" errors).
   Future<void> signInAsKiosk();
+
+  /// Signs in with device credentials entered on DeviceSetupScreen and
+  /// returns the resulting device's identity, WITHOUT persisting anything
+  /// -- DeviceSetupScreen only writes to DeviceCredentialsStore once this
+  /// succeeds. Signs back out and throws BackendAuthException if the
+  /// credentials are wrong, or if they belong to a non-kiosk account (e.g.
+  /// someone pasted admin credentials by mistake).
+  Future<DeviceIdentity> verifyDeviceCredentials({
+    required String email,
+    required String password,
+  });
+
+  /// This device's own identity (class scope + label), for CameraScreen's
+  /// assigned-class badge and DeviceSettingsScreen. Assumes signInAsKiosk
+  /// has already succeeded.
+  Future<DeviceIdentity> fetchDeviceIdentity();
+
+  /// Ends the current Supabase session -- used by DeviceSettingsScreen's
+  /// "Re-pair this device" action, alongside clearing
+  /// DeviceCredentialsStore, before returning to DeviceSetupScreen.
+  Future<void> signOut();
 
   /// Active, fully-enrolled employees plus every embedding produced from
   /// their enrollment photos -- what FaceMatcher compares live camera
@@ -137,6 +159,16 @@ class _UnconfiguredBackend implements KioskBackend {
 
   @override
   Future<void> signInAsKiosk() => _unconfigured;
+  @override
+  Future<DeviceIdentity> verifyDeviceCredentials({
+    required String email,
+    required String password,
+  }) =>
+      _unconfigured;
+  @override
+  Future<DeviceIdentity> fetchDeviceIdentity() => _unconfigured;
+  @override
+  Future<void> signOut() => _unconfigured;
   @override
   Future<List<EnrolledEmployee>> fetchEnrolledEmployees() => _unconfigured;
   @override

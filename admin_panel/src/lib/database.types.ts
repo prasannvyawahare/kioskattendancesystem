@@ -19,16 +19,30 @@ export interface Database {
           id: string;
           role: ProfileRole;
           full_name: string | null;
+          // Class-section scoping for kiosk devices -- see
+          // supabase/migrations/0026_kiosk_device_scoping.sql. Both null
+          // means unrestricted (sees every class); meaningless for admins.
+          assigned_standard: string | null;
+          assigned_section: string | null;
+          // Admin-panel-assigned device name (e.g. "12th - A Tablet"),
+          // distinct from full_name.
+          device_label: string | null;
           created_at: string;
         };
         Insert: {
           id: string;
           role: ProfileRole;
           full_name?: string | null;
+          assigned_standard?: string | null;
+          assigned_section?: string | null;
+          device_label?: string | null;
         };
         Update: Partial<{
           role: ProfileRole;
           full_name: string | null;
+          assigned_standard: string | null;
+          assigned_section: string | null;
+          device_label: string | null;
         }>;
         Relationships: [];
       };
@@ -316,6 +330,7 @@ export interface Database {
   };
 }
 
+export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export type Employee = Database["public"]["Tables"]["employees"]["Row"];
 export type EmployeePhoto = Database["public"]["Tables"]["employee_photos"]["Row"];
 export type AttendanceLog = Database["public"]["Tables"]["attendance_logs"]["Row"];

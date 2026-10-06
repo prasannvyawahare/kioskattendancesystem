@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/device_identity.dart';
 import '../models/member_summary.dart';
 import '../services/attendance_mode_service.dart';
 import '../services/embedding_service.dart';
@@ -54,6 +55,12 @@ class _MemberListScreenState extends State<MemberListScreen> {
   List<MemberSummary>? _members;
   String? _error;
 
+  /// Best-effort; null on an unrestricted device or a fetch failure, in
+  /// which case standard/section stay freely editable in _editMember below
+  /// (matching this device's own enroll_member()/update_member() behavior
+  /// -- see supabase/migrations/0026_kiosk_device_scoping.sql).
+  DeviceIdentity? _deviceIdentity;
+
   /// Non-blocking, unlike [_error] -- set alongside a successfully-loaded
   /// (cached) [_members] list, so _buildBody still renders it instead of
   /// swallowing the list behind an error screen.
@@ -63,6 +70,9 @@ class _MemberListScreenState extends State<MemberListScreen> {
   void initState() {
     super.initState();
     _refresh();
+    KioskBackend.instance.fetchDeviceIdentity().then((identity) {
+      if (mounted && identity.isClassScoped) setState(() => _deviceIdentity = identity);
+    }).catchError((_) {});
   }
 
   Future<void> _refresh() async {
@@ -163,11 +173,23 @@ class _MemberListScreenState extends State<MemberListScreen> {
                   ),
                   TextFormField(
                     controller: standardController,
-                    decoration: const InputDecoration(labelText: 'Standard (optional)'),
+                    readOnly: _deviceIdentity != null,
+                    decoration: InputDecoration(
+                      labelText: 'Standard (optional)',
+                      helperText: _deviceIdentity != null
+                          ? 'Locked to this device\'s assigned class'
+                          : null,
+                    ),
                   ),
                   TextFormField(
                     controller: sectionController,
-                    decoration: const InputDecoration(labelText: 'Section (optional)'),
+                    readOnly: _deviceIdentity != null,
+                    decoration: InputDecoration(
+                      labelText: 'Section (optional)',
+                      helperText: _deviceIdentity != null
+                          ? 'Locked to this device\'s assigned class'
+                          : null,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Align(
