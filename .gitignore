@@ -35,3 +35,6 @@ supabase/.temp/
 
 # OS
 .DS_Store
+
+# JVM crash dumps (accidentally committed from IDE runs)
+hs_err_pid*.log
